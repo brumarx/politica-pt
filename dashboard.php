@@ -149,12 +149,10 @@ function get_iniciativas(int $page, string $gp, string $search): array {
     $total = db_one("SELECT COUNT(*) as n FROM iniciativas i WHERE $where", $params)['n'] ?? 0;
     $offset = ($page - 1) * $per;
     $rows = db_query(
-        "SELECT i.id, i.tipo, i.titulo, i.data_entrada, i.estado, i.url_ar,
-                GROUP_CONCAT(DISTINCT d.gp_sigla) as autores_gp,
-                COUNT(DISTINCT ia.dep_id) as n_autores
+        "SELECT i.id, i.tipo, i.titulo, i.autoria_gp, i.data_entrada, i.estado, i.url_ar,
+                COUNT(ia.dep_id) as n_autores
          FROM iniciativas i
          LEFT JOIN iniciativas_autores ia ON ia.iniciativa_id=i.id
-         LEFT JOIN deputados d ON d.id=ia.dep_id
          WHERE $where GROUP BY i.id ORDER BY i.data_entrada DESC LIMIT ? OFFSET ?",
         array_values(array_merge($params, [$per, $offset]))
     );
@@ -610,6 +608,7 @@ try { $st = get_stats(); $ok = $st['deputados'] > 0; } catch(Exception $e) { $st
 
 <div class="sec-hdr"><h2 class="sec-ttl">📋 Mais activos em iniciativas</h2>
 <a href="?tab=score&ord=iniciativas" class="sec-act">ver ranking</a></div>
+<p style="font-size:.76rem;color:var(--mut);margin:-4px 0 8px">Conta subscrição, não autoria exclusiva — iniciativas assinadas por todo o Grupo Parlamentar contam para cada um dos seus deputados.</p>
 <div class="card"><ul class="mlist">
 <?php foreach (array_slice($st['mais_iniciativas'],0,8) as $i => $r):
   $cor = gp_cor($r['gp_sigla']??''); ?>
@@ -634,21 +633,19 @@ $total_pags = $ok ? (int)ceil($rk['total'] / $rk['per']) : 0;
 <?php
 $tem_autores_ui   = (bool) db_one("SELECT 1 as x FROM iniciativas_autores LIMIT 1", []);
 $tem_contratos_ui = (bool) db_one("SELECT 1 as x FROM contratos_base LIMIT 1", []);
-$peso_presenca_ui = 0.40 / (0.40 + ($tem_autores_ui ? 0.30 : 0) + ($tem_contratos_ui ? 0.30 : 0));
+$soma_pesos_ui    = 0.40 + ($tem_autores_ui ? 0.30 : 0) + ($tem_contratos_ui ? 0.30 : 0);
+$peso_presenca_ui = 0.40 / $soma_pesos_ui;
+$peso_ini_ui      = $tem_autores_ui ? 0.30 / $soma_pesos_ui : 0;
 ?>
 <div class="method">
   <h3>Como é calculado o Score de Transparência</h3>
   <div class="mrow"><div class="mw"><?=round($peso_presenca_ui*100)?>%</div><div class="md"><strong>Presença em Plenário</strong> — % de sessões com presença registada</div></div>
   <?php if ($tem_autores_ui): ?>
-  <div class="mrow"><div class="mw">30%</div><div class="md"><strong>Iniciativas Legislativas</strong> — iniciativas apresentadas (tecto: 5 = 100%)</div></div>
+  <div class="mrow"><div class="mw"><?=round($peso_ini_ui*100)?>%</div><div class="md"><strong>Iniciativas Legislativas</strong> — iniciativas subscritas (tecto: 5 = 100%). Conta subscrição, não autoria exclusiva: quando um Grupo Parlamentar assina uma iniciativa colectivamente, todos os seus deputados recebem crédito por igual — o tecto de 5 existe precisamente para atenuar essa distorção.</div></div>
   <?php else: ?>
   <div class="mrow"><div class="mw" style="color:var(--mut)">—</div><div class="md" style="color:var(--mut)"><strong>Iniciativas Legislativas</strong> — desactivado: ainda sem dados de autoria por deputado (peso redistribuído para Presença)</div></div>
   <?php endif; ?>
-  <?php if ($tem_contratos_ui): ?>
-  <div class="mrow"><div class="mw">30%</div><div class="md"><strong>Contratos Públicos (Base)</strong> — ausência de contratos associados ao NIF</div></div>
-  <?php else: ?>
-  <div class="mrow"><div class="mw" style="color:var(--mut)">—</div><div class="md" style="color:var(--mut)"><strong>Contratos Públicos (Base)</strong> — desactivado: sem NIF/contratos cruzados ainda (peso redistribuído para Presença)</div></div>
-  <?php endif; ?>
+  <div class="mrow"><div class="mw" style="color:var(--mut)">—</div><div class="md" style="color:var(--mut)"><strong>Contratos Públicos</strong> — não incluído. Ao contrário do Brasil (CPF público e cruzável), em Portugal o NIF de pessoa singular não é público e o Portal Base só pesquisa por NIPC (empresa); ligar um deputado a uma empresa contratada exigiria o Registo Central do Beneficiário Efectivo, que não é de acesso livre. Peso redistribuído para Presença e Iniciativas.</div></div>
 </div>
 
 <form method="get" action="">
@@ -766,6 +763,7 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
 <thead><tr>
   <th style="width:60px">Tipo</th>
   <th>Título</th>
+  <th style="width:110px">Autoria</th>
   <th style="width:90px">Data</th>
   <th style="width:80px">Estado</th>
   <th style="width:60px">Link</th>
@@ -775,6 +773,7 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
 <tr>
   <td><span class="tipo"><?=htmlspecialchars($i['tipo']??'?')?></span></td>
   <td style="font-size:.82rem"><?=htmlspecialchars(substr($i['titulo']??'',0,100))?><?=strlen($i['titulo']??'')>100?'…':''?></td>
+  <td style="font-size:.75rem;color:var(--mut)" title="<?=(int)$i['n_autores']?> deputado(s) subscritor(es)"><?=htmlspecialchars($i['autoria_gp']??'—')?></td>
   <td style="font-size:.76rem;color:var(--mut)"><?=htmlspecialchars(substr($i['data_entrada']??'',0,10))?></td>
   <td style="font-size:.75rem;color:var(--mut)"><?=htmlspecialchars($i['estado']??'')?></td>
   <td><?php if ($i['url_ar']): ?><a href="<?=htmlspecialchars($i['url_ar'])?>" target="_blank" style="font-size:.75rem">↗ AR</a><?php endif; ?></td>
