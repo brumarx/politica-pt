@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS iniciativas (
     resultado       TEXT,                   -- Aprovado, Rejeitado, Caducado
     legislatura_id  INTEGER REFERENCES legislaturas(id),
     url_ar          TEXT,
+    autoria_gp      TEXT,                   -- siglas dos GP autores, ex: "PCP, L, BE"
     updated_at      DATETIME DEFAULT (datetime('now'))
 );
 

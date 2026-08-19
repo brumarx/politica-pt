@@ -541,32 +541,42 @@ def scrape_iniciativas(skip_existing=0):
     seen = set()
 
     def extrair_da_pagina(pw_page):
+        # Cada resultado é uma sequência de divs irmãos (sem <tr>/<table>):
+        # rótulo "Tipo" -> valor, "Número" -> valor, "Sessão" -> valor,
+        # "Autoria" -> valor (siglas GP), "Título" -> valor (link BID).
+        # Percorre a árvore em ordem e vai acumulando o campo mais recente
+        # de cada rótulo até encontrar "Título", que fecha um registo.
         soup = BeautifulSoup(pw_page.content(), "html.parser")
+        campos = {}
         novos = 0
-        for link in soup.find_all("a", href=re.compile(r"DetalheIniciativa\.aspx\?BID=\d+", re.I)):
-            m = re.search(r"BID=(\d+)", link["href"], re.I)
-            if not m:
+        for label_span in soup.find_all("span", class_="TextoRegular-Titulo"):
+            rotulo = label_span.get_text(strip=True)
+            br = label_span.find_next_sibling("br")
+            valor_span = br.find_next_sibling("span") if br else None
+            if not valor_span:
                 continue
-            bid = int(m.group(1))
-            if bid in seen:
-                continue
-            seen.add(bid)
-            titulo = link.get_text(strip=True)
-            if len(titulo) < 5:
-                continue
-            tipo = "?"
-            row = link.find_parent("tr")
-            if row:
-                txt = row.get_text(" ", strip=True)
-                tm = re.search(r"\b(PJL|PPL|PJR|PPR|APAN|IPC|PDL|PRJL)\b", txt)
-                if tm:
-                    tipo = tm.group(1)
-            iniciativas.append({
-                "id": bid, "tipo": tipo, "titulo": titulo[:500],
-                "legislatura_id": LEG_ID,
-                "url_ar": f"{BASE}/ActividadeParlamentar/Paginas/DetalheIniciativa.aspx?BID={bid}",
-            })
-            novos += 1
+            if rotulo == "Título":
+                link = valor_span.find("a", href=re.compile(r"DetalheIniciativa\.aspx\?BID=\d+", re.I))
+                titulo = valor_span.get_text(strip=True)
+                if link and len(titulo) >= 5:
+                    m = re.search(r"BID=(\d+)", link["href"], re.I)
+                    if m:
+                        bid = int(m.group(1))
+                        if bid not in seen:
+                            seen.add(bid)
+                            iniciativas.append({
+                                "id": bid,
+                                "tipo": campos.get("Tipo", "?"),
+                                "numero": campos.get("Número"),
+                                "autoria_gp": campos.get("Autoria"),
+                                "titulo": titulo[:500],
+                                "legislatura_id": LEG_ID,
+                                "url_ar": f"{BASE}/ActividadeParlamentar/Paginas/DetalheIniciativa.aspx?BID={bid}",
+                            })
+                            novos += 1
+                campos = {}  # reset para o próximo resultado
+            else:
+                campos[rotulo] = valor_span.get_text(strip=True)
         return novos, soup
 
     from playwright.sync_api import sync_playwright
@@ -676,14 +686,17 @@ def importar_iniciativas(db):
     for ini in ini_list:
         try:
             db.execute("""
-                INSERT INTO iniciativas(id,tipo,titulo,legislatura_id,url_ar,updated_at)
-                VALUES(?,?,?,?,?,datetime('now'))
+                INSERT INTO iniciativas(id,tipo,numero,autoria_gp,titulo,legislatura_id,url_ar,updated_at)
+                VALUES(?,?,?,?,?,?,?,datetime('now'))
                 ON CONFLICT(id) DO UPDATE SET
                     tipo       = COALESCE(excluded.tipo, tipo),
+                    numero     = COALESCE(excluded.numero, numero),
+                    autoria_gp = COALESCE(excluded.autoria_gp, autoria_gp),
                     titulo     = COALESCE(excluded.titulo, titulo),
                     url_ar     = COALESCE(excluded.url_ar, url_ar),
                     updated_at = datetime('now')
-            """, (ini["id"],ini["tipo"],ini["titulo"],ini["legislatura_id"],ini["url_ar"]))
+            """, (ini["id"],ini["tipo"],ini.get("numero"),ini.get("autoria_gp"),
+                  ini["titulo"],ini["legislatura_id"],ini["url_ar"]))
             gravados += 1
         except Exception as e:
             log.warning("Ini %s: %s", ini.get("id"), e)
