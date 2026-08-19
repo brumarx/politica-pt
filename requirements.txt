@@ -1,0 +1,11 @@
+# HTTP com TLS fingerprint impersonation (resolve bloqueio datacenter IPs)
+curl-cffi>=0.7.0
+# Parsing HTML
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+# Dados
+pandas>=2.1.0
+# PDFs (Entidade da Transparência)
+pdfplumber>=0.10.0
+# HTTP requests
+requests>=2.31.0

@@ -1,0 +1,9 @@
+Options -Indexes
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+)$ $1.php [L,QSA]
+RewriteRule ^$ dashboard.php [L,QSA]
+<FilesMatch "\.(html|php)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+</FilesMatch>
