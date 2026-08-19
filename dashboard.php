@@ -18,6 +18,7 @@ function get_db(): PDO {
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
         $db->exec('PRAGMA journal_mode=WAL');
+        $db->exec('PRAGMA busy_timeout=3000'); // falha em 3s em vez do default de 60s se a BD estiver bloqueada por um writer (ex: ETL)
     }
     return $db;
 }

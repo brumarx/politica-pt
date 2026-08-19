@@ -706,6 +706,65 @@ def importar_iniciativas(db):
     log.info("✓ Iniciativas: %d gravadas, %d erros", gravados, erros)
     log_etl(db, "AR_iniciativas", gravados, erros)
 
+
+def importar_iniciativas_autores(db):
+    """
+    Autoria individual por deputado. A página de detalhe de cada iniciativa
+    tem uma secção "Autoria" com um link por deputado apontando para
+    /DeputadoGP/Paginas/Biografia.aspx?BID=<id> — esse BID é o mesmo id
+    usado em deputados.id, por isso não precisa de fuzzy-match de nomes.
+    """
+    log.info("── Importar Autoria Individual das Iniciativas ─────────────")
+    pendentes = db.execute("""
+        SELECT i.id, i.url_ar FROM iniciativas i
+        WHERE NOT EXISTS (SELECT 1 FROM iniciativas_autores ia WHERE ia.iniciativa_id = i.id)
+        ORDER BY i.id
+    """).fetchall()
+    log.info("  %d iniciativas sem autoria individual", len(pendentes))
+    if not pendentes:
+        log_etl(db, "AR_iniciativas_autores", 0, 0)
+        return
+
+    deps_validos = {r[0] for r in db.execute("SELECT id FROM deputados").fetchall()}
+    padrao_bid = re.compile(r"/DeputadoGP/Paginas/Biografia\.aspx\?BID=(\d+)", re.I)
+
+    gravados = erros = ignorados = 0
+    for idx, row in enumerate(pendentes, 1):
+        ini_id, url = row["id"], row["url_ar"]
+        soup = get_html(url)
+        if not soup:
+            erros += 1
+            continue
+        links = soup.find_all("a", href=padrao_bid)
+        bids = set()
+        for link in links:
+            m = padrao_bid.search(link["href"])
+            if m:
+                bids.add(int(m.group(1)))
+        bids_validos = bids & deps_validos
+        if not bids_validos:
+            ignorados += 1
+        for dep_id in bids_validos:
+            try:
+                db.execute(
+                    "INSERT OR IGNORE INTO iniciativas_autores(iniciativa_id, dep_id) VALUES(?,?)",
+                    (ini_id, dep_id),
+                )
+                gravados += 1
+            except Exception as e:
+                log.warning("Autor ini=%s dep=%s: %s", ini_id, dep_id, e)
+                erros += 1
+        if idx % 10 == 0:
+            db.commit()  # commits frequentes — transacções longas bloqueiam o dashboard (WAL só permite 1 escritor)
+        if idx % 100 == 0:
+            log.info("  %d/%d iniciativas processadas (%d autores gravados, %d sem autor válido)",
+                      idx, len(pendentes), gravados, ignorados)
+
+    db.commit()
+    log.info("✓ Autoria: %d pares gravados, %d iniciativas sem autor válido, %d erros",
+              gravados, ignorados, erros)
+    log_etl(db, "AR_iniciativas_autores", gravados, erros)
+
 # ─── Scores ───────────────────────────────────────────────────────────────────
 
 def scrape_biografico(db):
@@ -958,6 +1017,7 @@ def main():
     p.add_argument("--deputados",   action="store_true")
     p.add_argument("--presencas",   action="store_true")
     p.add_argument("--iniciativas", action="store_true")
+    p.add_argument("--autores",     action="store_true", help="autoria individual das iniciativas")
     p.add_argument("--scores",      action="store_true")
     p.add_argument("--enrich",      action="store_true")
     p.add_argument("--biografico",  action="store_true")
@@ -972,6 +1032,7 @@ def main():
     try:
         if args.all or args.deputados:   importar_deputados(db, enrich=args.enrich)
         if args.all or args.iniciativas: importar_iniciativas(db)
+        if args.all or args.autores:     importar_iniciativas_autores(db)
         if args.all or args.presencas:   importar_presencas(db)
         if args.all or args.scores:      calcular_scores(db)
         if args.all or args.biografico:  scrape_biografico(db)
