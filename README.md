@@ -1,7 +1,6 @@
 # Transparência Política PT
 
 Dashboard de transparência política da Assembleia da República.
-Inspirado no [brmx.org/politica/](https://brmx.org/politica/).
 
 ## Stack
 
