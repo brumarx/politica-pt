@@ -199,19 +199,24 @@ def scrape_lista_deputados():
         if len(nome) < 3:
             continue
 
-        # Extrair GP e círculo do contexto (linha da tabela)
+        # Extrair GP e círculo — layout em divs (sem <tr>), o campo "Círculo
+        # Eleitoral" só aparece 2 níveis acima do link (testado directamente:
+        # "Nome | X | Círculo Eleitoral | Porto | Grupo Parlamentar / Partido | Y")
         gp = circulo = ""
-        row = link.find_parent("tr") or link.find_parent("li") or link.find_parent("div")
-        if row:
+        row = link
+        for _ in range(4):
+            row = row.parent if row else None
+            if row is None:
+                break
             txt = row.get_text(" ", strip=True)
-            for g in GPS:
-                if re.search(r'\b' + re.escape(g) + r'\b', txt):
-                    gp = g
-                    break
-            for c in CIRCULOS:
-                if c in txt:
-                    circulo = c
-                    break
+            if "Círculo Eleitoral" in txt:
+                mc = re.search(r"Círculo Eleitoral\s+(.+?)\s+Grupo Parlamentar", txt)
+                if mc:
+                    circulo = mc.group(1).strip()
+                mg = re.search(r"Grupo Parlamentar\s*/\s*Partido\s+(\S+)", txt)
+                if mg:
+                    gp = mg.group(1).strip()
+                break
 
         deputados.append({
             "id":            bid,
@@ -305,14 +310,30 @@ def importar_deputados(db, enrich=False):
         for d in deps:
             d.update(extra.get(d["id"], {}))
 
+    # Círculos eleitorais (distritos) — tabela de referência, popular uma vez
+    for nome in CIRCULOS:
+        db.execute("INSERT OR IGNORE INTO circulos_eleitorais(nome) VALUES(?)", (nome,))
+    # Garantir que TODOS os gp_sigla que vamos gravar já existem em
+    # grupos_parlamentares antes do INSERT (FK) — mesmo siglas "cruas" como
+    # PSD/CDS-PP que só são normalizadas para AD depois deste loop.
+    for sigla in {d.get("gp_sigla") for d in deps if d.get("gp_sigla")}:
+        db.execute(
+            "INSERT INTO grupos_parlamentares(sigla,nome,legislatura_id) VALUES(?,?,?) "
+            "ON CONFLICT(sigla) DO NOTHING",
+            (sigla, sigla, LEG_ID)
+        )
+    db.commit()
+    circulo_ids = dict(db.execute("SELECT nome, id FROM circulos_eleitorais").fetchall())
+
     gravados = erros = 0
     for d in deps:
         try:
+            circulo_id = circulo_ids.get(d.get("circulo"))
             db.execute("""
                 INSERT INTO deputados
                     (id,nome_completo,nome_curto,gp_sigla,activo,
-                     legislatura_id,url_foto,url_parlamento,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,datetime('now'))
+                     legislatura_id,url_foto,url_parlamento,circulo_id,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,datetime('now'))
                 ON CONFLICT(id) DO UPDATE SET
                     nome_completo  = COALESCE(excluded.nome_completo, nome_completo),
                     nome_curto     = COALESCE(excluded.nome_curto, nome_curto),
@@ -321,10 +342,11 @@ def importar_deputados(db, enrich=False):
                     legislatura_id = excluded.legislatura_id,
                     url_foto       = COALESCE(excluded.url_foto, url_foto),
                     url_parlamento = COALESCE(excluded.url_parlamento, url_parlamento),
+                    circulo_id     = COALESCE(excluded.circulo_id, circulo_id),
                     updated_at     = datetime('now')
                 -- nunca apaga dados enriquecidos manualmente
             """, (d["id"],d["nome_completo"],d["nome_curto"],d.get("gp_sigla"),
-                  d["activo"],d["legislatura_id"],d["url_foto"],d["url_parlamento"]))
+                  d["activo"],d["legislatura_id"],d["url_foto"],d["url_parlamento"],circulo_id))
             gravados += 1
         except Exception as e:
             log.warning("Dep BID %s: %s", d.get("id"), e)
