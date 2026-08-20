@@ -45,10 +45,8 @@ require __DIR__ . '/_header.php';
 <div class="card" style="padding:18px 20px">
   <p style="font-size:.88rem;line-height:1.6">
     Dashboard de transparência sobre a actividade da <strong>Assembleia da República</strong> (<?=LEG_NUM?> Legislatura),
-    construído sobre dados publicamente disponíveis no site do parlamento. Inspirado no
-    <a href="https://brmx.org/politica/" target="_blank">projecto irmão para o Brasil</a>, adaptado à realidade
-    e às fontes de dados portuguesas — que são, em vários pontos, mais restritas do que as brasileiras (ver secção
-    "Limitações" abaixo).
+    construído sobre dados publicamente disponíveis no site do parlamento. Algumas métricas têm limitações
+    estruturais impostas pelas próprias fontes de dados portuguesas — ver secção "Limitações" abaixo.
   </p>
 </div>
 
@@ -85,8 +83,7 @@ require __DIR__ . '/_header.php';
     Transparência" (<a href="https://entidadetransparencia.pt" target="_blank">entidadetransparencia.pt</a>)
     disponibiliza consulta pública dos registos de interesses dos deputados, mas com um aviso legal explícito:
     a <strong>reprodução</strong> dos elementos de rendimento e património é proibida (Lei n.º 52/2019).
-    Por isso este site não tenta replicar essa informação — ao contrário do Brasil, onde os dados do TSE
-    são abertos e cruzáveis.
+    Por isso este site não tenta replicar essa informação.
   </div>
   <div style="padding:14px 20px;border-bottom:1px solid var(--bord)">
     <strong>Contratos Públicos — não é possível cruzar por deputado.</strong> O Portal Base

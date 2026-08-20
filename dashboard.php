@@ -315,7 +315,7 @@ $peso_ini_ui      = $tem_autores_ui ? 0.30 / $soma_pesos_ui : 0;
   <?php else: ?>
   <div class="mrow"><div class="mw" style="color:var(--mut)">—</div><div class="md" style="color:var(--mut)"><strong>Iniciativas Legislativas</strong> — desactivado: ainda sem dados de autoria por deputado (peso redistribuído para Presença)</div></div>
   <?php endif; ?>
-  <div class="mrow"><div class="mw" style="color:var(--mut)">—</div><div class="md" style="color:var(--mut)"><strong>Contratos Públicos</strong> — não incluído. Ao contrário do Brasil (CPF público e cruzável), em Portugal o NIF de pessoa singular não é público e o Portal Base só pesquisa por NIPC (empresa); ligar um deputado a uma empresa contratada exigiria o Registo Central do Beneficiário Efectivo, que não é de acesso livre. Peso redistribuído para Presença e Iniciativas.</div></div>
+  <div class="mrow"><div class="mw" style="color:var(--mut)">—</div><div class="md" style="color:var(--mut)"><strong>Contratos Públicos</strong> — não incluído. O NIF de pessoa singular não é público em Portugal e o Portal Base só pesquisa por NIPC (empresa); ligar um deputado a uma empresa contratada exigiria o Registo Central do Beneficiário Efectivo, que não é de acesso livre. Peso redistribuído para Presença e Iniciativas.</div></div>
 </div>
 
 <form method="get" action="">
@@ -609,7 +609,7 @@ elseif ($tab === 'declaracoes'):
 <div class="decl-info">
   <div class="icon">⚖️</div>
   <h3>Declarações de Rendimentos e Património — indisponível por lei</h3>
-  <p>A Entidade para a Transparência disponibiliza consulta pública do registo de interesses, mas com um aviso legal explícito: a <strong>reprodução</strong> de elementos de rendimento e património é proibida (Lei n.º 52/2019). Este site não guarda nem mostra esses valores — ao contrário do que acontece com dados eleitorais no Brasil (TSE), que são abertos e cruzáveis.</p>
+  <p>A Entidade para a Transparência disponibiliza consulta pública do registo de interesses, mas com um aviso legal explícito: a <strong>reprodução</strong> de elementos de rendimento e património é proibida (Lei n.º 52/2019). Este site não guarda nem mostra esses valores.</p>
   <p style="margin-top:8px;font-size:.8rem">Mais detalhes em <a href="ajuda.php">Ajuda</a>.</p>
   <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
     <a href="https://entidadetransparencia.pt" target="_blank" class="sbtn">↗ Consultar na Entidade para a Transparência</a>
