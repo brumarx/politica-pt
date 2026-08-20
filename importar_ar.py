@@ -355,68 +355,6 @@ def importar_deputados(db, enrich=False):
 
 # ─── Presenças ────────────────────────────────────────────────────────────────
 
-def scrape_presencas_dep(bid):
-    """
-    Scraping de presenças via Playwright headless.
-    Os dados são carregados via AJAX após page load —
-    necessário esperar pelo spinner WaitingSpin desaparecer.
-    """
-    try:
-        browser = _get_browser()
-        page = browser.new_page(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                       "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        )
-        try:
-            page.goto(
-                f"{BASE}/DeputadoGP/Paginas/PresencasReunioesPlenarias.aspx?BID={bid}",
-                timeout=60000, wait_until="domcontentloaded"
-            )
-            # Esperar spinner desaparecer (dados AJAX carregados)
-            try:
-                page.wait_for_selector("img[src*='WaitingSpin']", state="hidden", timeout=25000)
-            except Exception:
-                pass
-            page.wait_for_timeout(2000)
-
-            txt = page.inner_text("body")
-        finally:
-            page.close()
-
-    except Exception as e:
-        log.warning("Playwright BID %d: %s", bid, e)
-        return []
-
-    # Parsear texto — formato confirmado (RAW):
-    # "Data\n2026-03-13\nNúmero\n65\xa0\xa0\xa0\nTipo\nOrdinária\nPresença/Falta\nPresença (P)\n\n\n"
-    presencas = []
-
-    # Normalizar: remover   e espaços extra
-    txt = txt.replace("\xa0", " ").replace("\u00a0", " ")
-
-    # Extrair todos os blocos Data→Estado
-    # Padrão: "Data\nYYYY-MM-DD\n...\nPresença/Falta\nESTADO"
-    blocos = re.findall(
-        r"Data\s+(\d{4}-\d{2}-\d{2}).*?/Falta\s*\n([^\n]+)",
-        txt, re.S | re.I
-    )
-    for data, estado_txt in blocos:
-        et = estado_txt.strip().upper()
-        if "JUSTIF" in et or "FJ" in et:
-            estado = "FJ"
-        elif "FALT" in et or et.startswith("F"):
-            estado = "F"
-        elif "ESCUS" in et or "MISS" in et:
-            estado = "E"
-        elif "PRES" in et or et.startswith("P"):
-            estado = "P"
-        else:
-            continue
-        presencas.append({"dep_id": bid, "data": data, "estado": estado})
-
-    return presencas
-
-
 def importar_presencas(db):
     """
     Presenças via Playwright — sequencial (Playwright sync API não é thread-safe).
@@ -945,14 +883,24 @@ def calcular_scores(db):
         "SELECT COUNT(*) FROM sessoes_plenarias WHERE legislatura_id=?", (LEG_ID,)
     ).fetchone()[0] or 1
 
+    # Peso de cada estado de presença na "qualidade" usada no score — falta
+    # sem justificação pesa 0, falta justificada conta a meio, escusa/missão
+    # institucional (ainda é trabalho parlamentar, só não em plenário) quase
+    # não penaliza. taxa_presenca (P puro) continua a ser guardada à parte —
+    # é o que aparece na UI como "% presença", mais simples de entender.
+    PESO_ESTADO = {"P": 1.0, "E": 0.9, "FJ": 0.5, "F": 0.0}
+
     raw = []
     for dep in deps:
         did = dep[0]
-        pres = db.execute("""
-            SELECT COUNT(*) FROM presencas p
+        contagens = dict(db.execute("""
+            SELECT p.estado, COUNT(*) FROM presencas p
             JOIN sessoes_plenarias s ON p.sessao_id=s.id
-            WHERE p.dep_id=? AND s.legislatura_id=? AND p.estado='P'
-        """, (did, LEG_ID)).fetchone()[0]
+            WHERE p.dep_id=? AND s.legislatura_id=?
+            GROUP BY p.estado
+        """, (did, LEG_ID)).fetchall())
+        pres = contagens.get("P", 0)
+        qualidade = sum(contagens.get(e, 0) * peso for e, peso in PESO_ESTADO.items()) / total_sessoes
         # Iniciativas do deputado via autores (0 se iniciativas_autores vazia —
         # nesse caso pesos["iniciativas"]==0 e este valor não afecta o score_total)
         n_ini = db.execute("""
@@ -963,7 +911,8 @@ def calcular_scores(db):
         n_c, v_c = db.execute(
             "SELECT COUNT(*),COALESCE(SUM(valor),0) FROM contratos_base WHERE dep_id=?", (did,)
         ).fetchone()
-        raw.append({"dep_id":did,"taxa":pres/total_sessoes,"ini":n_ini,"contr":n_c,"val":v_c})
+        raw.append({"dep_id":did,"taxa":pres/total_sessoes,"qualidade":qualidade,
+                    "ini":n_ini,"contr":n_c,"val":v_c})
 
     def pct(lst, v):
         return round(sum(1 for x in lst if x<=v)/len(lst)*100, 1) if lst else 50.0
@@ -973,7 +922,7 @@ def calcular_scores(db):
     tc = [s["contr"] for s in raw]
 
     for s in raw:
-        sp = s["taxa"]*100*pesos["presenca"]
+        sp = s["qualidade"]*100*pesos["presenca"]
         si = min(s["ini"]/5,1.0)*100*pesos["iniciativas"]
         sc = max(0,1-min(s["contr"]/10,1.0))*100*pesos["contratos"]
         db.execute("""

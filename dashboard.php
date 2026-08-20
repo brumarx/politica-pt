@@ -309,7 +309,7 @@ $peso_ini_ui      = $tem_autores_ui ? 0.30 / $soma_pesos_ui : 0;
 ?>
 <div class="method">
   <h3>Como é calculado o Score de Transparência</h3>
-  <div class="mrow"><div class="mw"><?=round($peso_presenca_ui*100)?>%</div><div class="md"><strong>Presença em Plenário</strong> — % de sessões com presença registada</div></div>
+  <div class="mrow"><div class="mw"><?=round($peso_presenca_ui*100)?>%</div><div class="md"><strong>Presença em Plenário</strong> — presença conta 100%, ausência institucional (missão/comissão) 90%, falta justificada 50%, falta sem justificação 0%</div></div>
   <?php if ($tem_autores_ui): ?>
   <div class="mrow"><div class="mw"><?=round($peso_ini_ui*100)?>%</div><div class="md"><strong>Iniciativas Legislativas</strong> — iniciativas subscritas (tecto: 5 = 100%). Conta subscrição, não autoria exclusiva: quando um Grupo Parlamentar assina uma iniciativa colectivamente, todos os seus deputados recebem crédito por igual — o tecto de 5 existe precisamente para atenuar essa distorção.</div></div>
   <?php else: ?>
