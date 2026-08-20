@@ -58,11 +58,10 @@ require __DIR__ . '/../_header.php';
     INE (sem bloqueio), que tem menos indicadores mas é tecnicamente acessível.
   </div>
   <div style="padding:14px 20px;border-bottom:1px solid var(--bord)">
-    <strong>Sem presidente de câmara nem contratos públicos ainda.</strong> O schema já
-    prevê estes campos (<code>presidente_camara</code>, tabela
-    <code>municipio_contratos</code>) mas ainda não foram populados — precisam do CNE
-    (eleições autárquicas) e do Portal Base filtrado por entidade municipal,
-    respectivamente.
+    <strong>Sabemos qual o partido de cada câmara, não o nome do presidente.</strong> Os
+    resultados das Autárquicas 2025 (<a href="https://www.eleicoes.mai.gov.pt" target="_blank">eleicoes.mai.gov.pt</a>,
+    API pública) dão votos/mandatos/partido vencedor por município — não o nome da pessoa
+    eleita. Contratos públicos por município (Portal Base) ainda não implementados.
   </div>
   <div style="padding:14px 20px">
     <strong>Freguesia — sem fonte nacional agregada.</strong> Ao contrário do nível
@@ -79,9 +78,13 @@ require __DIR__ . '/../_header.php';
     e 0013908 (receitas) das câmaras municipais, fonte original DGAL
     (<a href="https://www.ine.pt" target="_blank">ine.pt</a>)
   </div>
-  <div style="padding:12px 20px;font-size:.85rem">
+  <div style="padding:12px 20px;border-bottom:1px solid var(--bord);font-size:.85rem">
     <strong>dados.gov.pt</strong> — catálogo nacional de dados abertos, usado para localizar
     os indicadores INE correctos
+  </div>
+  <div style="padding:12px 20px;font-size:.85rem">
+    <strong>eleicoes.mai.gov.pt</strong> — resultados das Eleições Autárquicas 2025
+    (Secretaria-Geral do Ministério da Administração Interna), API JSON pública
   </div>
 </div>
 

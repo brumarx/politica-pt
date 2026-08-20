@@ -22,7 +22,7 @@ function get_municipios_lista(string $search, string $ordem): array {
     $ord = $order_map[$ordem] ?? 'despesa_total DESC';
 
     $rows = aut_query("
-        SELECT m.id, m.nome,
+        SELECT m.id, m.nome, m.presidente_partido,
                (SELECT valor_milhares FROM municipio_financas WHERE municipio_id=m.id AND tipo='despesa' AND categoria_cod='D') as despesa_total,
                (SELECT valor_milhares FROM municipio_financas WHERE municipio_id=m.id AND tipo='receita' AND categoria_cod='R') as receita_total,
                (SELECT ano FROM municipio_financas WHERE municipio_id=m.id AND tipo='despesa' AND categoria_cod='D') as ano_despesa,
@@ -41,6 +41,7 @@ function get_stats_globais(): array {
         'total_municipios' => aut_one("SELECT COUNT(*) as n FROM municipios")['n'] ?? 0,
         'despesa_total'    => aut_one("SELECT SUM(valor_milhares) as n FROM municipio_financas WHERE tipo='despesa' AND categoria_cod='D'")['n'] ?? 0,
         'receita_total'    => aut_one("SELECT SUM(valor_milhares) as n FROM municipio_financas WHERE tipo='receita' AND categoria_cod='R'")['n'] ?? 0,
+        'top_partido'      => aut_one("SELECT presidente_partido, COUNT(*) as n FROM municipios WHERE presidente_partido IS NOT NULL GROUP BY presidente_partido ORDER BY n DESC LIMIT 1"),
     ];
     aut_cache_set('stats_globais', $stats, 3600);
     return $stats;
@@ -61,6 +62,9 @@ require __DIR__ . '/../_header.php';
   <div class="scard"><div class="sval acc"><?=number_format($stats['total_municipios'])?></div><div class="slbl">Municípios</div></div>
   <div class="scard"><div class="sval">€<?=number_format($stats['despesa_total']/1000,1)?>M</div><div class="slbl">Despesa total (mais recente por município)</div></div>
   <div class="scard"><div class="sval">€<?=number_format($stats['receita_total']/1000,1)?>M</div><div class="slbl">Receita total (mais recente por município)</div></div>
+  <?php if ($stats['top_partido']): ?>
+  <div class="scard"><div class="sval acc"><?=htmlspecialchars($stats['top_partido']['presidente_partido'])?></div><div class="slbl"><?=$stats['top_partido']['n']?> câmaras (Autárquicas 2025)</div></div>
+  <?php endif; ?>
 </div>
 
 <div class="method" style="margin-bottom:20px">
@@ -95,6 +99,7 @@ require __DIR__ . '/../_header.php';
 <table class="tbl">
 <thead><tr>
   <th>Município</th>
+  <th style="width:110px">Câmara</th>
   <th style="width:140px">Despesa total</th>
   <th style="width:140px">Receita total</th>
   <th style="width:70px">Ano</th>
@@ -103,6 +108,7 @@ require __DIR__ . '/../_header.php';
 <?php foreach ($municipios as $m): ?>
 <tr>
   <td><a href="municipio.php?id=<?=$m['id']?>"><?=htmlspecialchars($m['nome'])?></a></td>
+  <td style="font-size:.75rem"><?=$m['presidente_partido'] ? htmlspecialchars($m['presidente_partido']) : '—'?></td>
   <td style="font-family:var(--serif)"><?=$m['despesa_total'] !== null ? '€'.number_format($m['despesa_total']) . 'k' : '—'?></td>
   <td style="font-family:var(--serif)"><?=$m['receita_total'] !== null ? '€'.number_format($m['receita_total']) . 'k' : '—'?></td>
   <td style="font-size:.75rem;color:var(--mut)"><?=$m['ano_despesa'] ?? $m['ano_receita'] ?? '—'?></td>

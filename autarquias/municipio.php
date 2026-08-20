@@ -35,6 +35,10 @@ $totais = aut_one(
         (SELECT ano FROM municipio_financas WHERE municipio_id=? AND tipo='receita' AND categoria_cod='R') as ano_receita
     ", [$id, $id, $id, $id]
 );
+$eleicoes = aut_query(
+    "SELECT partido_sigla, votos, percentagem, mandatos, presidente_eleito, ano
+     FROM municipio_eleicoes WHERE municipio_id=? ORDER BY mandatos DESC, votos DESC", [$id]
+);
 
 $ambito = 'autarquias';
 $page_title = $municipio['nome'];
@@ -50,6 +54,7 @@ require __DIR__ . '/../_header.php';
   <div>
     <div class="profile-nome"><?=htmlspecialchars($municipio['nome'])?></div>
     <div class="profile-meta">
+      <?php if ($municipio['presidente_partido']): ?><span class="gptag" style="background:var(--acc)">Câmara: <?=htmlspecialchars($municipio['presidente_partido'])?></span><?php endif; ?>
       <?php if ($municipio['presidente_camara']): ?><span>Presidente: <?=htmlspecialchars($municipio['presidente_camara'])?></span><?php endif; ?>
       <?php if ($municipio['populacao']): ?><span>· <?=number_format($municipio['populacao'])?> habitantes</span><?php endif; ?>
     </div>
@@ -65,6 +70,32 @@ require __DIR__ . '/../_header.php';
     </div>
   </div>
 </div>
+
+<?php if ($eleicoes): ?>
+<div class="sec-hdr"><h2 class="sec-ttl">🗳️ Eleições Autárquicas <?=$eleicoes[0]['ano']?></h2></div>
+<div class="card">
+<div style="overflow-x:auto">
+<table class="tbl">
+<thead><tr>
+  <th>Partido/Coligação</th>
+  <th style="width:100px">Votos</th>
+  <th style="width:80px">%</th>
+  <th style="width:90px">Mandatos</th>
+</tr></thead>
+<tbody>
+<?php foreach ($eleicoes as $e): ?>
+<tr<?=$e['presidente_eleito']?' style="background:var(--surf2)"':''?>>
+  <td style="font-size:.85rem"><?=$e['presidente_eleito']?'👑 ':''?><?=htmlspecialchars($e['partido_sigla'])?></td>
+  <td><?=number_format($e['votos'])?></td>
+  <td><?=number_format($e['percentagem'],1)?>%</td>
+  <td><?=(int)$e['mandatos']?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+</div>
+</div>
+<?php endif; ?>
 
 <div class="two">
   <div>

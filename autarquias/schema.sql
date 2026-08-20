@@ -45,6 +45,22 @@ CREATE TABLE IF NOT EXISTS municipio_financas (
 CREATE INDEX IF NOT EXISTS idx_mfin_municipio ON municipio_financas(municipio_id);
 CREATE INDEX IF NOT EXISTS idx_mfin_ano ON municipio_financas(ano);
 
+-- Resultados das eleições autárquicas (Câmara Municipal) — fonte:
+-- eleicoes.mai.gov.pt (API JSON pública, sem autenticação nem bloqueio).
+CREATE TABLE IF NOT EXISTS municipio_eleicoes (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    municipio_id    INTEGER NOT NULL REFERENCES municipios(id),
+    ano             INTEGER NOT NULL,
+    partido_sigla   TEXT,
+    votos           INTEGER,
+    percentagem     REAL,
+    mandatos        INTEGER,
+    presidente_eleito INTEGER NOT NULL DEFAULT 0,  -- 1 = este partido ganhou a presidência
+    updated_at      DATETIME DEFAULT (datetime('now')),
+    UNIQUE(municipio_id, ano, partido_sigla)
+);
+CREATE INDEX IF NOT EXISTS idx_meleicoes_municipio ON municipio_eleicoes(municipio_id);
+
 -- Contratos públicos cruzados do Portal Base por entidade adjudicante
 -- (câmara municipal) — mesma fonte usada no politica-pt.
 CREATE TABLE IF NOT EXISTS municipio_contratos (

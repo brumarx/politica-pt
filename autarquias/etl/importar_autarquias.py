@@ -203,10 +203,82 @@ def importar_financas(db):
     log_etl(db, "INE_financas", gravados, erros)
 
 
+MAI_BASE = "https://www.eleicoes.mai.gov.pt/autarquicas2025/assets/static"
+MAI_ANO = 2025
+ORGAO_CAMARA_MUNICIPAL = 4  # id do órgão "Câmara Municipal" na API do MAI
+
+
+def fetch_mai(path):
+    r = requests.get(f"{MAI_BASE}/{path}", headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+    r.raise_for_status()
+    return r.json()["data"]
+
+
+def importar_eleicoes(db):
+    log.info("── Importar Eleições Autárquicas %d (Câmara Municipal) ─", MAI_ANO)
+    municipio_ids = dict(db.execute("SELECT nome, id FROM municipios").fetchall())
+
+    # Nível 1: território nacional -> distritos/regiões autónomas
+    distritos = fetch_mai("territory/children-electionId=1-territoryId=1.json")
+    log.info("  %d distritos/regiões", len(distritos))
+
+    gravados = erros = sem_match = 0
+    for idx, distrito in enumerate(distritos, 1):
+        try:
+            concelhos = fetch_mai(f"territory/children-electionId=1-territoryId={distrito['id']}.json")
+        except Exception as e:
+            log.warning("  Distrito %s: %s", distrito.get("descriptionShort"), e)
+            erros += 1
+            continue
+
+        for concelho in concelhos:
+            nome = concelho.get("descriptionShort", "").strip()
+            municipio_id = municipio_ids.get(nome)
+            if not municipio_id:
+                sem_match += 1
+                continue
+            try:
+                resultado = fetch_mai(
+                    f"result/territory-electionId=1-territoryId={concelho['id']}-organId={ORGAO_CAMARA_MUNICIPAL}.json"
+                )
+            except Exception as e:
+                log.warning("  %s: %s", nome, e)
+                erros += 1
+                continue
+
+            partidos = resultado.get("currentResults", {}).get("resultsParty", [])
+            for p in partidos:
+                try:
+                    db.execute("""
+                        INSERT INTO municipio_eleicoes
+                            (municipio_id,ano,partido_sigla,votos,percentagem,mandatos,presidente_eleito,updated_at)
+                        VALUES(?,?,?,?,?,?,?,datetime('now'))
+                        ON CONFLICT(municipio_id,ano,partido_sigla) DO UPDATE SET
+                            votos=excluded.votos, percentagem=excluded.percentagem,
+                            mandatos=excluded.mandatos, presidente_eleito=excluded.presidente_eleito,
+                            updated_at=datetime('now')
+                    """, (municipio_id, MAI_ANO, p.get("acronym"), p.get("votes"),
+                          p.get("percentage"), p.get("mandates"), 1 if p.get("presidents") else 0))
+                    gravados += 1
+                    if p.get("presidents"):
+                        db.execute("UPDATE municipios SET presidente_partido=? WHERE id=?",
+                                   (p.get("acronym"), municipio_id))
+                except Exception as e:
+                    log.warning("  %s/%s: %s", nome, p.get("acronym"), e)
+                    erros += 1
+        db.commit()
+        log.info("  %d/%d distritos processados", idx, len(distritos))
+
+    log.info("✓ Eleições: %d resultados gravados, %d municípios sem match, %d erros",
+              gravados, sem_match, erros)
+    log_etl(db, "MAI_eleicoes", gravados, erros)
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--all", action="store_true")
     p.add_argument("--financas", action="store_true")
+    p.add_argument("--eleicoes", action="store_true")
     args = p.parse_args()
 
     if not any(vars(args).values()):
@@ -218,6 +290,8 @@ def main():
     try:
         if args.all or args.financas:
             importar_financas(db)
+        if args.all or args.eleicoes:
+            importar_eleicoes(db)
     finally:
         db.close()
     log.info("✅ Concluído.")
