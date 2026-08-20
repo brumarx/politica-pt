@@ -489,18 +489,26 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
 // TAB: GRUPOS - Grupos Parlamentares Activos
 // ══════════════════════════════════════════════
 elseif ($tab === 'grupos'):
-try { 
-    $grupos = get_grupos(); 
-    $ok = count($grupos) > 0; 
-} catch(Exception $e) { 
-    $grupos = []; 
-    $ok = false; 
+try {
+    $grupos = get_grupos();
+    if ($gp) { $grupos = array_values(array_filter($grupos, fn($g) => ($g['sigla'] ?? '') === $gp)); }
+    $ok = count($grupos) > 0;
+} catch(Exception $e) {
+    $grupos = [];
+    $ok = false;
 }
 ?>
 
 <?php if (!$ok): ?>
 <div class="empty"><div class="ei">🏛️</div><h3>Sem dados de grupos</h3></div>
 <?php else: ?>
+
+<?php if ($gp): ?>
+<div style="margin-bottom:14px;font-size:.85rem">
+  Filtrado por <span class="gptag" style="background:<?=gp_cor($gp)?>"><?=htmlspecialchars($gp)?></span>
+  <a href="?tab=grupos" style="margin-left:8px">✕ limpar filtro</a>
+</div>
+<?php endif; ?>
 
 <div class="stats" style="margin-bottom:28px">
   <div class="scard"><div class="sval acc"><?=count($grupos)?></div><div class="slbl">Grupos parlamentares activos</div></div>
@@ -560,13 +568,24 @@ try {
 // TAB: PARTIDOS
 // ══════════════════════════════════════════════
 elseif ($tab === 'partidos'):
-try { $partidos = get_partidos(); $ok = count($partidos) > 0; }
+try {
+    $partidos = get_partidos();
+    if ($gp) { $partidos = array_values(array_filter($partidos, fn($p) => ($p['sigla'] ?? '') === $gp)); }
+    $ok = count($partidos) > 0;
+}
 catch(Exception $e) { $partidos=[]; $ok=false; }
 ?>
 
 <?php if (!$ok): ?>
 <div class="empty"><div class="ei">🎯</div><h3>Sem dados</h3></div>
 <?php else: ?>
+
+<?php if ($gp): ?>
+<div style="margin-bottom:14px;font-size:.85rem">
+  Filtrado por <span class="gptag" style="background:<?=gp_cor($gp)?>"><?=htmlspecialchars($gp)?></span>
+  <a href="?tab=partidos" style="margin-left:8px">✕ limpar filtro</a>
+</div>
+<?php endif; ?>
 
 <div class="stats" style="margin-bottom:28px">
   <div class="scard"><div class="sval acc"><?=count(array_filter($partidos,fn($p)=>($p['n_deputados']??0)>0))?></div><div class="slbl">Grupos parlamentares activos</div></div>
