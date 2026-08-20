@@ -129,58 +129,6 @@ function get_partidos(): array {
     return $r;
 }
 
-function get_declaracoes(int $page, string $gp, string $search, int $ano = null): array {
-    $per = 25;
-    $ck = "decl_{$page}_{$gp}_" . md5($search) . "_{$ano}_" . LEG_ID;
-    if ($c = cache_get($ck)) return $c;
-    
-    $where = "d.legislatura_id=?";
-    $params = [LEG_ID];
-    
-    if ($gp) { 
-        $where .= " AND d.gp_sigla=?"; 
-        $params[] = $gp; 
-    }
-    if ($search) { 
-        $where .= " AND (d.nome_completo LIKE ? OR d.nome_curto LIKE ?)"; 
-        $params[] = "%$search%"; 
-        $params[] = "%$search%"; 
-    }
-    if ($ano) { 
-        $where .= " AND dr.ano=?"; 
-        $params[] = $ano; 
-    }
-    
-    $total = db_one(
-        "SELECT COUNT(DISTINCT d.id) as n 
-         FROM deputados d 
-         LEFT JOIN declaracoes_rendimentos dr ON dr.dep_id=d.id 
-         WHERE $where", 
-        $params
-    )['n'] ?? 0;
-    
-    $offset = ($page - 1) * $per;
-    $rows = db_query(
-        "SELECT DISTINCT d.id, d.nome_curto, d.nome_completo, d.gp_sigla, d.url_foto,
-                COUNT(dr.id) as n_declaracoes,
-                MAX(dr.ano) as ultimo_ano,
-                MAX(dr.rendimento_total) as max_rendimento,
-                GROUP_CONCAT(DISTINCT dr.tipo) as tipos,
-                MAX(dr.extraido_em) as ultima_atualizacao
-         FROM deputados d 
-         LEFT JOIN declaracoes_rendimentos dr ON dr.dep_id=d.id
-         WHERE $where 
-         GROUP BY d.id 
-         ORDER BY n_declaracoes DESC, d.nome_curto ASC 
-         LIMIT ? OFFSET ?",
-        array_values(array_merge($params, [$per, $offset]))
-    );
-    
-    $r = compact('rows','total','page','per','gp','search','ano');
-    cache_set($ck, $r, 1800);
-    return $r;
-}
-
 function get_grupos(): array {
     $ck = 'grupos_' . LEG_ID;
     if ($c = cache_get($ck)) return $c;
@@ -212,24 +160,6 @@ function get_grupos(): array {
          ORDER BY n_activos DESC", [$leg, $leg, $leg, $leg, $leg]);
     cache_set($ck, $r, 3600);
     return $r;
-}
-
-function get_declaracoes_det(int $dep_id): array {
-    $ck = "decl_det_{$dep_id}";
-    if ($c = cache_get($ck)) return $c;
-    
-    $rows = db_query(
-        "SELECT dr.ano, dr.tipo, dr.rendimento_total, dr.patrimonio_json, dr.url_pdf, dr.extraido_em,
-                d.nome_curto, d.nome_completo, d.gp_sigla
-         FROM declaracoes_rendimentos dr
-         JOIN deputados d ON d.id = dr.dep_id
-         WHERE dr.dep_id = ?
-         ORDER BY dr.ano DESC, dr.tipo ASC",
-        [$dep_id]
-    );
-    
-    cache_set($ck, $rows, 3600);
-    return $rows;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -664,209 +594,16 @@ catch(Exception $e) { $partidos=[]; $ok=false; }
 // TAB: DECLARAÇÕES
 // ══════════════════════════════════════════════
 elseif ($tab === 'declaracoes'):
-
-// Se temos dep_id, mostrar detalhes de um deputado específico
-if ($dep_id):
-    $decl_det = get_declaracoes_det($dep_id);
-    $dep_info = $decl_det[0] ?? null;
-    $n_decl = count($decl_det);
 ?>
-    
-<?php if ($dep_info): ?>
-<div style="margin-bottom:20px">
-  <a href="?tab=declaracoes&gp=<?=$gp?>&ano=<?=$ano?>&q=<?=urlencode($search)?>" class="sbtn">← Voltar à lista</a>
-</div>
-
-<div class="decl-card">
-  <div class="decl-header">
-    <div class="decl-titulo"><?=htmlspecialchars($dep_info['nome_curto'] ?? $dep_info['nome_completo'])?></div>
-    <div class="decl-meta">
-      <span class="gptag" style="background:<?=gp_cor($dep_info['gp_sigla']??'')?>"><?=htmlspecialchars($dep_info['gp_sigla']??'')?></span>
-      · <?=$n_decl?> declarações
-    </div>
-  </div>
-  <div style="margin-top:12px;padding:12px;background:var(--surf2);border-radius:7px;font-size:.82rem;color:var(--mut)">
-    ℹ️ Os dados de rendimentos e património não são públicos por lei em Portugal. 
-    O que é público é o <strong>Registo de Interesses</strong> (cargos e actividades declaradas).
-    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-      <a href="https://www.parlamento.pt/RegistoInteresses/Paginas/RegistoInteressesDeputados.aspx" 
-         target="_blank" class="sbtn">↗ Registo de Interesses AR</a>
-      <a href="https://entidadetransparencia.pt" 
-         target="_blank" class="sbtn">↗ Entidade da Transparência</a>
-    </div>
-  </div>
-</div>
-
-<div class="card" style="margin-top:16px">
-<table class="tbl">
-<thead><tr>
-  <th style="width:80px">Ano</th>
-  <th style="width:100px">Tipo</th>
-  <th style="width:120px">Rendimento Total</th>
-  <th>Património</th>
-  <th style="width:80px">PDF</th>
-</tr></thead>
-<tbody>
-<?php foreach ($decl_det as $d): ?>
-<tr>
-  <td style="font-weight:600"><?=$d['ano']?></td>
-  <td><span class="tipo"><?=htmlspecialchars($d['tipo']??'')?></span></td>
-  <td>
-    <?php if ($d['rendimento_total'] && $d['rendimento_total'] > 0): ?>
-      <div class="decl-valor">€<?=number_format($d['rendimento_total'],0)?></div>
-    <?php else: ?>
-      <span style="color:var(--mut);font-size:.76rem">Não declarado</span>
-    <?php endif; ?>
-  </td>
-  <td>
-    <?php if ($d['patrimonio_json']): ?>
-      <?php 
-      $pat = json_decode($d['patrimonio_json'], true);
-      if ($pat && isset($pat['imoveis']) && count($pat['imoveis']) > 0): 
-      ?>
-        <div style="font-size:.82rem">
-          <strong><?=count($pat['imoveis'])?> imóveis</strong>
-          <?php if (isset($pat['veiculos']) && count($pat['veiculos']) > 0): ?>
-            · <?=count($pat['veiculos'])?> veículos
-          <?php endif; ?>
-        </div>
-      <?php else: ?>
-        <span style="color:var(--mut);font-size:.76rem">Sem detalhes</span>
-      <?php endif; ?>
-    <?php else: ?>
-      <span style="color:var(--mut);font-size:.76rem">Não processado</span>
-    <?php endif; ?>
-  </td>
-  <td>
-    <a href="https://www.parlamento.pt/RegistoInteresses/Paginas/RegInteresses_v5.aspx?BID=<?=$dep_id?>&leg=XVII" 
-       target="_blank" style="font-size:.75rem" title="Registo de Interesses na AR">↗ AR</a>
-  </td>
-</tr>
-<?php endforeach; ?>
-</tbody>
-</table>
-</div>
-
-<?php else: ?>
-<div class="empty"><div class="ei">📋</div><h3>Deputado não encontrado</h3></div>
-<?php endif; ?>
-
-<?php else: ?>
-<?php
-// Vista principal da lista de deputados
-try { 
-    $decl = get_declaracoes($page, $gp, $search, $ano); 
-    $ok = count($decl['rows']) > 0; 
-} catch(Exception $e) { 
-    $decl = ['rows'=>[],'total'=>0,'page'=>1,'per'=>25,'gp'=>'','search'=>'','ano'=>null]; 
-    $ok = false; 
-}
-$total_pags = $ok ? (int)ceil($decl['total'] / $decl['per']) : 0;
-
-// Anos disponíveis para filtros
-$anos_disponiveis = db_query("SELECT DISTINCT ano FROM declaracoes_rendimentos ORDER BY ano DESC");
-?>
-
-<?php if ($ok): ?>
-<div class="stats">
-  <div class="scard"><div class="sval acc"><?=number_format($decl['total'])?></div><div class="slbl">Deputados com declarações</div></div>
-  <div class="scard"><div class="sval"><?=count($anos_disponiveis)?></div><div class="slbl">Anos disponíveis</div></div>
-  <?php
-  $total_decl = db_one("SELECT COUNT(*) as n FROM declaracoes_rendimentos", [])['n'] ?? 0;
-  ?>
-  <div class="scard"><div class="sval"><?=number_format($total_decl)?></div><div class="slbl">Total de declarações</div></div>
-</div>
-
-<form method="get" action="">
-  <input type="hidden" name="tab" value="declaracoes">
-  <div class="search-box">
-    <input type="text" name="q" placeholder="Pesquisar deputado..." value="<?=htmlspecialchars($search)?>">
-    <button type="submit">Pesquisar</button>
-  </div>
-</form>
-
-<div class="ano-selector">
-  <span>Ano:</span>
-  <a href="?tab=declaracoes&gp=<?=$gp?>&q=<?=urlencode($search)?>" class="abtn <?=$ano===null?'on':''?>">Todos</a>
-  <?php foreach ($anos_disponiveis as $a): ?>
-  <a href="?tab=declaracoes&gp=<?=$gp?>&ano=<?=$a['ano']?>&q=<?=urlencode($search)?>" class="abtn <?=$ano===$a['ano']?'on':''?>"><?=$a['ano']?></a>
-  <?php endforeach; ?>
-  <?php if ($ok): ?><span class="pinfo" style="margin-left:auto"><?=number_format($decl['total'])?> deputados</span><?php endif; ?>
-</div>
-
-<div class="card">
-<table class="tbl">
-<thead><tr>
-  <th>Deputado</th>
-  <th style="width:56px">GP</th>
-  <th style="width:80px;text-align:center">Declarações</th>
-  <th style="width:80px">Último ano</th>
-  <th style="width:110px">Maior rendimento</th>
-  <th style="width:90px">Ações</th>
-</tr></thead>
-<tbody>
-<?php foreach ($decl['rows'] as $d):
-  $cor = gp_cor($d['gp_sigla']??'');
-?>
-<tr>
-  <td><div class="dep">
-    <img src="<?=htmlspecialchars($d['url_foto']??'')?>" alt="" class="dep-foto" onerror="this.style.display='none'">
-    <div class="dep-n"><?=htmlspecialchars($d['nome_curto'] ?? $d['nome_completo'] ?? '')?>
-  </div></td>
-  <td><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($d['gp_sigla']??'?')?></span></td>
-  <td style="text-align:center;font-family:var(--serif);font-size:1rem"><?=number_format($d['n_declaracoes'])?></td>
-  <td style="font-size:.76rem;color:var(--mut)"><?=$d['ultimo_ano']??'—'?></td>
-  <td>
-    <?php if ($d['max_rendimento'] && $d['max_rendimento'] > 0): ?>
-      <div class="decl-valor">€<?=number_format($d['max_rendimento'],0)?></div>
-    <?php else: ?>
-      <span style="color:var(--mut);font-size:.76rem">Não declarado</span>
-    <?php endif; ?>
-  </td>
-  <td>
-    <?php if ($d['n_declaracoes'] > 0): ?>
-      <a href="?tab=declaracoes&dep=<?=$d['id']?>&gp=<?=$gp?>&ano=<?=$ano?>&q=<?=urlencode($search)?>" class="sbtn" style="font-size:.75rem">Ver detalhes →</a>
-    <?php else: ?>
-      <span style="color:var(--mut);font-size:.76rem">Sem declarações</span>
-    <?php endif; ?>
-  </td>
-</tr>
-<?php endforeach; ?>
-</tbody>
-</table>
-<?php if ($total_pags > 1): ?>
-<div class="pag">
-  <?php if ($page > 1): ?><a href="?tab=declaracoes&gp=<?=$gp?>&ano=<?=$ano?>&p=<?=$page-1?>&q=<?=urlencode($search)?>" class="pbtn">← Anterior</a><?php endif; ?>
-  <?php for($pg=max(1,$page-2);$pg<=min($total_pags,$page+2);$pg++): ?>
-  <a href="?tab=declaracoes&gp=<?=$gp?>&ano=<?=$ano?>&p=<?=$pg?>&q=<?=urlencode($search)?>" class="pbtn <?=$pg===$page?'on':''?>"><?=$pg?></a>
-  <?php endfor; ?>
-  <?php if ($page < $total_pags): ?><a href="?tab=declaracoes&gp=<?=$gp?>&ano=<?=$ano?>&p=<?=$page+1?>&q=<?=urlencode($search)?>" class="pbtn">Seguinte →</a><?php endif; ?>
-  <span class="pinfo">Página <?=$page?> de <?=$total_pags?></span>
-</div>
-<?php endif; ?>
-</div>
-
-<?php else: ?>
 <div class="decl-info">
-  <div class="icon">💼</div>
-  <h3>Declarações de Rendimentos e Património</h3>
-  <p>Os dados das declarações de rendimentos e interesses dos deputados são publicados pela Entidade da Transparência em formato PDF.</p>
-  <p style="margin-top:8px">O scraper de PDFs está em desenvolvimento. Quando disponível, esta tab mostrará:</p>
-  <div class="sources">
-    <span class="src">💰 Rendimentos declarados</span>
-    <span class="src">🏠 Património imobiliário</span>
-    <span class="src">📈 Aplicações financeiras</span>
-    <span class="src">🚗 Veículos</span>
-    <span class="src">💼 Actividades remuneradas</span>
-  </div>
+  <div class="icon">⚖️</div>
+  <h3>Declarações de Rendimentos e Património — indisponível por lei</h3>
+  <p>A Entidade para a Transparência disponibiliza consulta pública do registo de interesses, mas com um aviso legal explícito: a <strong>reprodução</strong> de elementos de rendimento e património é proibida (Lei n.º 52/2019). Este site não guarda nem mostra esses valores — ao contrário do que acontece com dados eleitorais no Brasil (TSE), que são abertos e cruzáveis.</p>
+  <p style="margin-top:8px;font-size:.8rem">Mais detalhes em <a href="ajuda.php">Ajuda</a>.</p>
   <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-    <a href="https://www.entidadetransparencia.pt/transparencia/titulares-de-cargos-politicos-e-altos-cargos-publicos/assembleia-da-republica/" target="_blank" class="sbtn">↗ Entidade da Transparência</a>
-    <a href="https://www.parlamento.pt/RegistoInteresses/Paginas/deputados-e-membros-governo.aspx" target="_blank" class="sbtn">↗ Registo de Interesses AR</a>
+    <a href="https://entidadetransparencia.pt" target="_blank" class="sbtn">↗ Consultar na Entidade para a Transparência</a>
   </div>
 </div>
-<?php endif; ?>
-
-<?php endif; // dep_id check ?>
 
 <?php endif; // tabs ?>
 
