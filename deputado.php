@@ -29,7 +29,7 @@ $tem_autores_ui   = (bool) db_one("SELECT 1 as x FROM iniciativas_autores LIMIT 
 $tem_contratos_ui = (bool) db_one("SELECT 1 as x FROM contratos_base LIMIT 1", []);
 
 $iniciativas = db_query(
-    "SELECT i.id, i.tipo, i.titulo, i.autoria_gp, i.data_entrada, i.url_ar
+    "SELECT i.id, i.tipo, i.titulo, i.autoria_gp, i.data_entrada, i.resultado, i.url_ar
      FROM iniciativas_autores ia
      JOIN iniciativas i ON i.id = ia.iniciativa_id
      WHERE ia.dep_id = ?
@@ -137,6 +137,7 @@ require __DIR__ . '/_header.php';
   <th>Título</th>
   <th style="width:110px">Autoria</th>
   <th style="width:90px">Data</th>
+  <th style="width:90px">Resultado</th>
   <th style="width:60px">Link</th>
 </tr></thead>
 <tbody>
@@ -146,6 +147,12 @@ require __DIR__ . '/_header.php';
   <td style="font-size:.82rem"><?=htmlspecialchars(mb_substr($i['titulo']??'',0,90))?><?=mb_strlen($i['titulo']??'')>90?'…':''?></td>
   <td style="font-size:.75rem;color:var(--mut)"><?=htmlspecialchars($i['autoria_gp']??'—')?></td>
   <td style="font-size:.76rem;color:var(--mut)"><?=htmlspecialchars(substr($i['data_entrada']??'',0,10))?></td>
+  <td>
+    <?php if ($i['resultado']==='Aprovado'): ?><span class="badge bg">Aprovado</span>
+    <?php elseif ($i['resultado']==='Rejeitado'): ?><span class="badge br">Rejeitado</span>
+    <?php else: ?><span style="color:var(--mut);font-size:.75rem">Em tramitação</span>
+    <?php endif; ?>
+  </td>
   <td><?php if ($i['url_ar']): ?><a href="<?=htmlspecialchars($i['url_ar'])?>" target="_blank" style="font-size:.75rem">↗ AR</a><?php endif; ?></td>
 </tr>
 <?php endforeach; ?>

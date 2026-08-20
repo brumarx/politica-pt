@@ -113,7 +113,7 @@ function get_iniciativas(int $page, string $gp, string $search): array {
     $total = db_one("SELECT COUNT(*) as n FROM iniciativas i WHERE $where", $params)['n'] ?? 0;
     $offset = ($page - 1) * $per;
     $rows = db_query(
-        "SELECT i.id, i.tipo, i.titulo, i.autoria_gp, i.data_entrada, i.estado, i.url_ar,
+        "SELECT i.id, i.tipo, i.titulo, i.autoria_gp, i.data_entrada, i.resultado, i.url_ar,
                 COUNT(ia.dep_id) as n_autores
          FROM iniciativas i
          LEFT JOIN iniciativas_autores ia ON ia.iniciativa_id=i.id
@@ -454,7 +454,7 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
   <th>Título</th>
   <th style="width:110px">Autoria</th>
   <th style="width:90px">Data</th>
-  <th style="width:80px">Estado</th>
+  <th style="width:90px">Resultado</th>
   <th style="width:60px">Link</th>
 </tr></thead>
 <tbody>
@@ -464,7 +464,12 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
   <td style="font-size:.82rem"><?=htmlspecialchars(mb_substr($i['titulo']??'',0,100))?><?=mb_strlen($i['titulo']??'')>100?'…':''?></td>
   <td style="font-size:.75rem;color:var(--mut)" title="<?=(int)$i['n_autores']?> deputado(s) subscritor(es)"><?=htmlspecialchars($i['autoria_gp']??'—')?></td>
   <td style="font-size:.76rem;color:var(--mut)"><?=htmlspecialchars(substr($i['data_entrada']??'',0,10))?></td>
-  <td style="font-size:.75rem;color:var(--mut)"><?=htmlspecialchars($i['estado']??'')?></td>
+  <td>
+    <?php if ($i['resultado']==='Aprovado'): ?><span class="badge bg">Aprovado</span>
+    <?php elseif ($i['resultado']==='Rejeitado'): ?><span class="badge br">Rejeitado</span>
+    <?php else: ?><span style="color:var(--mut);font-size:.75rem">Em tramitação</span>
+    <?php endif; ?>
+  </td>
   <td><?php if ($i['url_ar']): ?><a href="<?=htmlspecialchars($i['url_ar'])?>" target="_blank" style="font-size:.75rem">↗ AR</a><?php endif; ?></td>
 </tr>
 <?php endforeach; ?>

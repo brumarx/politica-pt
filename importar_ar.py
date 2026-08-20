@@ -703,6 +703,65 @@ def importar_iniciativas_autores(db):
               gravados, ignorados, erros)
     log_etl(db, "AR_iniciativas_autores", gravados, erros)
 
+# ─── Resultado das Votações ─────────────────────────────────────────────────
+
+_RESULTADO_VOTACAO_RE = re.compile(
+    r"Votação em \d{4}-\d{2}-\d{2} na Reunião Plenária n\.º\s?\d+(.*?)(Aprovado|Rejeitado)",
+    re.S
+)
+RESULTADO_RECHECK_DIAS = 3  # iniciativas ainda sem resultado — não vale a pena verificar mais que isso
+
+
+def extrair_resultado_votacao(body_text):
+    """
+    O resultado final (Aprovado/Rejeitado) só existe em texto livre no
+    histórico processual da iniciativa, não em campo estruturado. Uma
+    iniciativa pode ter várias "Votação em..." — requerimentos processuais
+    (ex: baixa à comissão sem votação) têm a palavra "Requerimento" entre a
+    data e o resultado; a votação substantiva final não tem. Fica-se com a
+    última votação substantiva (mais recente na página).
+    """
+    candidatos = [
+        resultado for meio, resultado in _RESULTADO_VOTACAO_RE.findall(body_text)
+        if "Requerimento" not in meio
+    ]
+    return candidatos[-1] if candidatos else None
+
+
+def importar_resultados(db):
+    log.info("── Importar Resultado das Votações ─────────────────")
+    pendentes = db.execute("""
+        SELECT id, url_ar FROM iniciativas
+        WHERE resultado IS NULL
+        AND (resultado_checked_at IS NULL OR resultado_checked_at < datetime('now', ?))
+    """, (f"-{RESULTADO_RECHECK_DIAS} days",)).fetchall()
+    log.info("  %d iniciativas por verificar (recheck: %dd)", len(pendentes), RESULTADO_RECHECK_DIAS)
+    if not pendentes:
+        log_etl(db, "AR_resultados", 0, 0)
+        return
+
+    votados = erros = 0
+    for idx, (ini_id, url) in enumerate(pendentes, 1):
+        soup = get_html(url)
+        if not soup:
+            erros += 1
+            continue
+        resultado = extrair_resultado_votacao(soup.get_text(" ", strip=True))
+        db.execute(
+            "UPDATE iniciativas SET resultado=?, resultado_checked_at=datetime('now') WHERE id=?",
+            (resultado, ini_id)
+        )
+        if resultado:
+            votados += 1
+        if idx % 100 == 0:
+            db.commit()
+            log.info("  %d/%d iniciativas processadas (%d com resultado final)",
+                      idx, len(pendentes), votados)
+
+    db.commit()
+    log.info("✓ Resultados: %d/%d com resultado final, %d erros", votados, len(pendentes), erros)
+    log_etl(db, "AR_resultados", votados, erros)
+
 # ─── Ofertas, Deslocações e Hospitalidades ──────────────────────────────────
 
 _RDH_CAMPOS = ["Valor", "Ofertante", "Representação", "Data", "Duração", "Destino final", "Local"]
@@ -1078,6 +1137,7 @@ def main():
     p.add_argument("--iniciativas", action="store_true")
     p.add_argument("--autores",     action="store_true", help="autoria individual das iniciativas")
     p.add_argument("--ofertas",     action="store_true", help="ofertas/deslocações/hospitalidades")
+    p.add_argument("--resultados",  action="store_true", help="resultado das votações (aprovado/rejeitado)")
     p.add_argument("--scores",      action="store_true")
     p.add_argument("--snapshots",   action="store_true", help="regenerar JSONs pré-computados p/ o dashboard")
     p.add_argument("--enrich",      action="store_true")
@@ -1095,6 +1155,7 @@ def main():
         if args.all or args.iniciativas: importar_iniciativas(db)
         if args.all or args.autores:     importar_iniciativas_autores(db)
         if args.all or args.ofertas:     importar_ofertas(db)
+        if args.all or args.resultados:  importar_resultados(db)
         if args.all or args.presencas:   importar_presencas(db)
         if args.all or args.scores:      calcular_scores(db)
         if args.all or args.biografico:  scrape_biografico(db)

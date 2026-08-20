@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS iniciativas (
     data_aprovacao  DATE,
     estado          TEXT,
     resultado       TEXT,                   -- Aprovado, Rejeitado, Caducado
+    resultado_checked_at DATETIME,          -- quando foi verificado (resultado pode ficar NULL = ainda em tramitação)
     legislatura_id  INTEGER REFERENCES legislaturas(id),
     url_ar          TEXT,
     autoria_gp      TEXT,                   -- siglas dos GP autores, ex: "PCP, L, BE"
