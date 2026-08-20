@@ -112,7 +112,11 @@ def snap_grupos(db):
                COALESCE(
                    (SELECT d2.url_foto FROM deputados d2 WHERE d2.id=g.lider_bid LIMIT 1),
                    (SELECT d2.url_foto FROM deputados d2 LEFT JOIN scores s2 ON s2.dep_id=d2.id WHERE d2.gp_sigla=g.sigla AND d2.activo=1 AND d2.legislatura_id=? ORDER BY COALESCE(s2.score_total,0) DESC LIMIT 1)
-               ) as lider_foto
+               ) as lider_foto,
+               COALESCE(
+                   (SELECT d2.id FROM deputados d2 WHERE d2.id=g.lider_bid LIMIT 1),
+                   (SELECT d2.id FROM deputados d2 LEFT JOIN scores s2 ON s2.dep_id=d2.id WHERE d2.gp_sigla=g.sigla AND d2.activo=1 AND d2.legislatura_id=? ORDER BY COALESCE(s2.score_total,0) DESC LIMIT 1)
+               ) as lider_id
         FROM grupos_parlamentares g
         LEFT JOIN deputados d ON d.gp_sigla=g.sigla AND d.legislatura_id=?
         LEFT JOIN scores s ON s.dep_id=d.id AND s.legislatura_id=?
@@ -120,7 +124,7 @@ def snap_grupos(db):
         GROUP BY g.sigla
         HAVING n_activos > 0
         ORDER BY n_activos DESC
-    """, (leg, leg, leg, leg, leg)).fetchall()]
+    """, (leg, leg, leg, leg, leg, leg)).fetchall()]
     write_json("grupos", rows)
 
 

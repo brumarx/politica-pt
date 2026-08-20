@@ -18,16 +18,21 @@ $dep_id = preg_replace('/[^0-9]/', '', $_GET['dep'] ?? '') ? (int)($_GET['dep'] 
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
 // get_gps() já vem de db.php
-function get_stats(): array {
-    if ($snap = snapshot_get('globals')) return $snap; // pré-computado pelo ETL — zero queries
-    $ck = 'stats_' . LEG_ID;
+function get_stats(string $gp = ''): array {
+    if ($gp === '' && ($snap = snapshot_get('globals'))) return $snap; // pré-computado pelo ETL — zero queries
+    $ck = 'stats_' . LEG_ID . '_' . $gp;
     if ($c = cache_get($ck)) return $c;
     $leg = LEG_ID;
+    $gp_and = $gp ? "AND d.gp_sigla=?" : "";
+    $params_dep = $gp ? [$leg, $gp] : [$leg];
     $stats = [
-        'deputados'   => db_one("SELECT COUNT(*) as n FROM deputados WHERE activo=1 AND legislatura_id=?", [$leg])['n'] ?? 0,
+        'deputados'   => db_one("SELECT COUNT(*) as n FROM deputados d WHERE d.activo=1 AND d.legislatura_id=? $gp_and", $params_dep)['n'] ?? 0,
         'sessoes'     => db_one("SELECT COUNT(*) as n FROM sessoes_plenarias WHERE legislatura_id=?", [$leg])['n'] ?? 0,
         'iniciativas' => db_one("SELECT COUNT(*) as n FROM iniciativas WHERE legislatura_id=?", [$leg])['n'] ?? 0,
-        'presenca_media' => db_one("SELECT ROUND(AVG(taxa_presenca)*100,1) as n FROM scores WHERE legislatura_id=?", [$leg])['n'] ?? 0,
+        'presenca_media' => db_one(
+            "SELECT ROUND(AVG(s.taxa_presenca)*100,1) as n FROM scores s
+             JOIN deputados d ON d.id=s.dep_id
+             WHERE s.legislatura_id=? $gp_and", $params_dep)['n'] ?? 0,
         'por_gp' => db_query(
             "SELECT d.gp_sigla as gp, COUNT(d.id) as total,
                     ROUND(AVG(s.taxa_presenca)*100,1) as presenca_media,
@@ -35,23 +40,23 @@ function get_stats(): array {
                     ROUND(AVG(s.score_total),1) as score_medio
              FROM deputados d
              LEFT JOIN scores s ON s.dep_id=d.id AND s.legislatura_id=d.legislatura_id
-             WHERE d.activo=1 AND d.legislatura_id=?
-             GROUP BY d.gp_sigla ORDER BY total DESC", [$leg]),
+             WHERE d.activo=1 AND d.legislatura_id=? $gp_and
+             GROUP BY d.gp_sigla ORDER BY total DESC", $params_dep),
         'top_presenca' => db_query(
             "SELECT d.id, d.nome_curto, d.gp_sigla, s.taxa_presenca, s.score_total
              FROM deputados d JOIN scores s ON s.dep_id=d.id
-             WHERE d.activo=1 AND d.legislatura_id=?
-             ORDER BY s.taxa_presenca DESC LIMIT 10", [$leg]),
+             WHERE d.activo=1 AND d.legislatura_id=? $gp_and
+             ORDER BY s.taxa_presenca DESC LIMIT 10", $params_dep),
         'menos_presenca' => db_query(
             "SELECT d.id, d.nome_curto, d.gp_sigla, s.taxa_presenca, s.score_total
              FROM deputados d JOIN scores s ON s.dep_id=d.id
-             WHERE d.activo=1 AND d.legislatura_id=?
-             ORDER BY s.taxa_presenca ASC LIMIT 10", [$leg]),
+             WHERE d.activo=1 AND d.legislatura_id=? $gp_and
+             ORDER BY s.taxa_presenca ASC LIMIT 10", $params_dep),
         'mais_iniciativas' => db_query(
             "SELECT d.id, d.nome_curto, d.gp_sigla, s.n_iniciativas, s.score_total
              FROM deputados d JOIN scores s ON s.dep_id=d.id
-             WHERE d.activo=1 AND d.legislatura_id=?
-             ORDER BY s.n_iniciativas DESC LIMIT 10", [$leg]),
+             WHERE d.activo=1 AND d.legislatura_id=? $gp_and
+             ORDER BY s.n_iniciativas DESC LIMIT 10", $params_dep),
     ];
     cache_set($ck, $stats, 3600);
     return $stats;
@@ -161,14 +166,18 @@ function get_grupos(): array {
                 COALESCE(
                     (SELECT d2.url_foto FROM deputados d2 WHERE d2.id=g.lider_bid LIMIT 1),
                     (SELECT d2.url_foto FROM deputados d2 LEFT JOIN scores s2 ON s2.dep_id=d2.id WHERE d2.gp_sigla=g.sigla AND d2.activo=1 AND d2.legislatura_id=? ORDER BY COALESCE(s2.score_total,0) DESC LIMIT 1)
-                ) as lider_foto
+                ) as lider_foto,
+                COALESCE(
+                    (SELECT d2.id FROM deputados d2 WHERE d2.id=g.lider_bid LIMIT 1),
+                    (SELECT d2.id FROM deputados d2 LEFT JOIN scores s2 ON s2.dep_id=d2.id WHERE d2.gp_sigla=g.sigla AND d2.activo=1 AND d2.legislatura_id=? ORDER BY COALESCE(s2.score_total,0) DESC LIMIT 1)
+                ) as lider_id
          FROM grupos_parlamentares g
          LEFT JOIN deputados d ON d.gp_sigla=g.sigla AND d.legislatura_id=?
          LEFT JOIN scores s ON s.dep_id=d.id AND s.legislatura_id=?
          WHERE g.legislatura_id=?
          GROUP BY g.sigla 
          HAVING n_activos > 0
-         ORDER BY n_activos DESC", [$leg, $leg, $leg, $leg, $leg]);
+         ORDER BY n_activos DESC", [$leg, $leg, $leg, $leg, $leg, $leg]);
     cache_set($ck, $r, 3600);
     return $r;
 }
@@ -219,13 +228,20 @@ require __DIR__ . '/_header.php';
 // TAB: VISÃO GERAL
 // ══════════════════════════════════════════════
 if ($tab === 'visao'):
-try { $st = get_stats(); $ok = $st['deputados'] > 0; } catch(Exception $e) { $st=[]; $ok=false; }
+try { $st = get_stats($gp); $ok = $st['deputados'] > 0; } catch(Exception $e) { $st=[]; $ok=false; }
 ?>
 <?php if (!$ok): ?>
 <div class="empty"><div class="ei">⚙️</div><h3>Base de dados ainda vazia</h3>
 <p>Execute o ETL para importar os dados da Assembleia da República.</p>
 <code>python importar_ar.py --all</code></div>
 <?php else: ?>
+
+<?php if ($gp): ?>
+<div style="margin-bottom:14px;font-size:.85rem">
+  Filtrado por <span class="gptag" style="background:<?=gp_cor($gp)?>"><?=htmlspecialchars($gp)?></span>
+  <a href="?tab=visao" style="margin-left:8px">✕ limpar filtro</a>
+</div>
+<?php endif; ?>
 
 <div class="stats">
   <div class="scard"><div class="sval acc"><?=number_format($st['deputados'])?></div><div class="slbl">Deputados em funções</div></div>
@@ -340,6 +356,7 @@ $peso_ini_ui      = $tem_autores_ui ? 0.30 / $soma_pesos_ui : 0;
 <div class="empty"><div class="ei">📋</div><h3>Sem dados</h3><p>Correr o ETL primeiro.</p><code>python importar_ar.py --all</code></div>
 <?php else: ?>
 <div class="card">
+<div style="overflow-x:auto">
 <table class="tbl">
 <thead><tr>
   <th style="width:36px">#</th>
@@ -385,6 +402,7 @@ $peso_ini_ui      = $tem_autores_ui ? 0.30 / $soma_pesos_ui : 0;
 <?php endforeach; ?>
 </tbody>
 </table>
+</div>
 <?php if ($total_pags > 1): ?>
 <div class="pag">
   <?php if ($page > 1): ?><a href="?tab=score&gp=<?=$gp?>&ord=<?=$ordem?>&p=<?=$page-1?>&q=<?=urlencode($search)?>" class="pbtn">← Anterior</a><?php endif; ?>
@@ -429,6 +447,7 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
 <div class="empty"><div class="ei">📋</div><h3>Sem iniciativas</h3><p>Correr o ETL de iniciativas.</p><code>python importar_ar.py --iniciativas</code></div>
 <?php else: ?>
 <div class="card">
+<div style="overflow-x:auto">
 <table class="tbl">
 <thead><tr>
   <th style="width:60px">Tipo</th>
@@ -442,7 +461,7 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
 <?php foreach ($ini['rows'] as $i): ?>
 <tr>
   <td><span class="tipo"><?=htmlspecialchars($i['tipo']??'?')?></span></td>
-  <td style="font-size:.82rem"><?=htmlspecialchars(substr($i['titulo']??'',0,100))?><?=strlen($i['titulo']??'')>100?'…':''?></td>
+  <td style="font-size:.82rem"><?=htmlspecialchars(mb_substr($i['titulo']??'',0,100))?><?=mb_strlen($i['titulo']??'')>100?'…':''?></td>
   <td style="font-size:.75rem;color:var(--mut)" title="<?=(int)$i['n_autores']?> deputado(s) subscritor(es)"><?=htmlspecialchars($i['autoria_gp']??'—')?></td>
   <td style="font-size:.76rem;color:var(--mut)"><?=htmlspecialchars(substr($i['data_entrada']??'',0,10))?></td>
   <td style="font-size:.75rem;color:var(--mut)"><?=htmlspecialchars($i['estado']??'')?></td>
@@ -451,6 +470,7 @@ $total_pags = $ok ? (int)ceil($ini['total'] / $ini['per']) : 0;
 <?php endforeach; ?>
 </tbody>
 </table>
+</div>
 <?php if ($total_pags > 1): ?>
 <div class="pag">
   <?php if ($page > 1): ?><a href="?tab=iniciativas&p=<?=$page-1?>&q=<?=urlencode($search)?>" class="pbtn">← Anterior</a><?php endif; ?>
@@ -517,7 +537,7 @@ try {
   
   <div style="margin-top:12px">
     <div style="font-size:.82rem;color:var(--mut);margin-bottom:6px">
-      <strong>Líder:</strong> <?=htmlspecialchars($g['lider_nome']??'N/A')?>
+      <strong>Líder:</strong> <?php if ($g['lider_id']): ?><a href="deputado.php?id=<?=$g['lider_id']?>"><?=htmlspecialchars($g['lider_nome']??'N/A')?></a><?php else: ?><?=htmlspecialchars($g['lider_nome']??'N/A')?><?php endif; ?>
     </div>
     <?= bar(($g['presenca_media']??0)/100, $cor) ?>
     <div style="font-size:.72rem;color:var(--mut);margin-top:3px">

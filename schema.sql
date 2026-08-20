@@ -125,6 +125,37 @@ CREATE TABLE IF NOT EXISTS iniciativas_autores (
 CREATE INDEX IF NOT EXISTS idx_ini_autores_dep ON iniciativas_autores(dep_id);
 
 -- -------------------------------------------------------------
+-- Ofertas, Deslocações e Hospitalidades (registo público, distinto
+-- do Registo de Interesses — sem restrição legal de reprodução)
+-- -------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS ofertas_hospitalidades (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    dep_id          INTEGER NOT NULL REFERENCES deputados(id),
+    categoria       TEXT    NOT NULL CHECK(categoria IN ('Ofertas','Deslocações','Hospitalidades')),
+    descricao       TEXT,
+    valor           TEXT,                   -- só "Ofertas" (texto p/ preservar "100,00 €")
+    local           TEXT,                   -- só Deslocações/Hospitalidades
+    ofertante       TEXT,
+    representacao   TEXT,
+    data_registo    TEXT,
+    duracao         TEXT,
+    destino_final   TEXT,                   -- só "Ofertas" (ex: "Devolução ao Deputado")
+    updated_at      DATETIME DEFAULT (datetime('now')),
+    UNIQUE(dep_id, categoria, descricao, data_registo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ofertas_dep ON ofertas_hospitalidades(dep_id);
+
+-- Rastreio de quando cada deputado foi verificado (não quando teve o último
+-- registo — precisa de existir mesmo para quem nunca teve nada) para que o
+-- ETL seja incremental: só reverifica quem está desactualizado, não todos.
+CREATE TABLE IF NOT EXISTS ofertas_check (
+    dep_id      INTEGER PRIMARY KEY REFERENCES deputados(id),
+    checked_at  DATETIME NOT NULL
+);
+
+-- -------------------------------------------------------------
 -- Contratos públicos (Portal Base)
 -- -------------------------------------------------------------
 

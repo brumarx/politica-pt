@@ -703,6 +703,116 @@ def importar_iniciativas_autores(db):
               gravados, ignorados, erros)
     log_etl(db, "AR_iniciativas_autores", gravados, erros)
 
+# ─── Ofertas, Deslocações e Hospitalidades ──────────────────────────────────
+
+_RDH_CAMPOS = ["Valor", "Ofertante", "Representação", "Data", "Duração", "Destino final", "Local"]
+_RDH_CAMPOS_RE = "|".join(re.escape(c) for c in _RDH_CAMPOS)
+_RDH_MARCADOR_RE = re.compile(
+    r"(Ofertas(?=\s*Descrição)|Deslocações(?=\s*Descrição)|Hospitalidades(?=\s*Descrição)"
+    r"|Não existem registos de (?:ofertas|deslocações|hospitalidades)(?: nem \w+)?)"
+)
+
+
+def parse_ofertas_hospitalidades(body_text):
+    """
+    Parser do texto simples (BeautifulSoup .get_text) da página
+    RegistoDeslocacoesHospitalidades/Paginas/RDH.aspx?BID=X&lg=XVII.
+    Estrutura confirmada: 3 secções (Ofertas/Deslocações/Hospitalidades),
+    cada uma com 0+ itens "Descrição ... campo valor campo valor...", ou
+    substituída por "Não existem registos de <categoria>" quando vazia —
+    essa frase pode aparecer colada ao fim do bloco anterior, não só como
+    cabeçalho próprio, por isso o parsing é feito por tokens sequenciais.
+    """
+    m = re.search(
+        r"Ofertas, Deslocações e Hospitalidades - (.*?)\s"
+        r"(?=Ofertas\b|Deslocações\b|Hospitalidades\b|Não existem)",
+        body_text
+    )
+    if not m:
+        return []
+    resto = body_text[m.end():].split("A carregar...")[0]
+
+    tokens = _RDH_MARCADOR_RE.split(resto)
+    itens, categoria_actual = [], None
+    for tok in tokens:
+        tok = tok.strip()
+        if not tok:
+            continue
+        if tok in ("Ofertas", "Deslocações", "Hospitalidades"):
+            categoria_actual = tok
+            continue
+        if tok.startswith("Não existem"):
+            categoria_actual = None
+            continue
+        if not categoria_actual:
+            continue
+        for parte in re.split(r"Descrição", tok)[1:]:
+            sub = re.split(f"({_RDH_CAMPOS_RE})", parte)
+            item = {"categoria": categoria_actual, "descricao": sub[0].strip()}
+            for j in range(1, len(sub) - 1, 2):
+                item[sub[j]] = sub[j + 1].strip()
+            itens.append(item)
+    return itens
+
+
+OFERTAS_INTERVALO_DIAS = 7  # não vale a pena reverificar mais que semanalmente
+
+
+def importar_ofertas(db):
+    log.info("── Importar Ofertas/Deslocações/Hospitalidades ─────")
+    deps = db.execute("""
+        SELECT d.id FROM deputados d
+        WHERE d.activo=1 AND d.legislatura_id=?
+        AND NOT EXISTS (
+            SELECT 1 FROM ofertas_check c
+            WHERE c.dep_id=d.id AND c.checked_at >= datetime('now', ?)
+        )
+    """, (LEG_ID, f"-{OFERTAS_INTERVALO_DIAS} days")).fetchall()
+    log.info("  %d deputados por verificar (intervalo: %dd)", len(deps), OFERTAS_INTERVALO_DIAS)
+    if not deps:
+        log_etl(db, "AR_ofertas", 0, 0)
+        return
+
+    gravados = erros = com_registo = 0
+    for idx, (did,) in enumerate(deps, 1):
+        soup = get_html(
+            f"{BASE}/RegistoDeslocacoesHospitalidades/Paginas/RDH.aspx?BID={did}&lg={LEG_NUM}"
+        )
+        if not soup:
+            erros += 1
+            continue
+        db.execute(
+            "INSERT INTO ofertas_check(dep_id,checked_at) VALUES(?,datetime('now')) "
+            "ON CONFLICT(dep_id) DO UPDATE SET checked_at=datetime('now')",
+            (did,)
+        )
+        itens = parse_ofertas_hospitalidades(soup.get_text(" ", strip=True))
+        if itens:
+            com_registo += 1
+        for it in itens:
+            try:
+                db.execute("""
+                    INSERT OR REPLACE INTO ofertas_hospitalidades
+                    (dep_id,categoria,descricao,valor,local,ofertante,representacao,
+                     data_registo,duracao,destino_final,updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,datetime('now'))
+                """, (did, it["categoria"], it.get("descricao"), it.get("Valor"),
+                      it.get("Local"), it.get("Ofertante"), it.get("Representação"),
+                      it.get("Data"), it.get("Duração"), it.get("Destino final")))
+                gravados += 1
+            except Exception as e:
+                log.warning("Oferta dep=%s: %s", did, e)
+                erros += 1
+        if idx % 20 == 0:
+            db.commit()
+            log.info("  %d/%d deputados (%d com registos, %d itens gravados)",
+                      idx, len(deps), com_registo, gravados)
+
+    db.commit()
+    log.info("✓ Ofertas: %d deputados com registos, %d itens, %d erros",
+              com_registo, gravados, erros)
+    log_etl(db, "AR_ofertas", gravados, erros)
+
 # ─── Scores ───────────────────────────────────────────────────────────────────
 
 def scrape_biografico(db):
@@ -967,6 +1077,7 @@ def main():
     p.add_argument("--presencas",   action="store_true")
     p.add_argument("--iniciativas", action="store_true")
     p.add_argument("--autores",     action="store_true", help="autoria individual das iniciativas")
+    p.add_argument("--ofertas",     action="store_true", help="ofertas/deslocações/hospitalidades")
     p.add_argument("--scores",      action="store_true")
     p.add_argument("--snapshots",   action="store_true", help="regenerar JSONs pré-computados p/ o dashboard")
     p.add_argument("--enrich",      action="store_true")
@@ -983,6 +1094,7 @@ def main():
         if args.all or args.deputados:   importar_deputados(db, enrich=args.enrich)
         if args.all or args.iniciativas: importar_iniciativas(db)
         if args.all or args.autores:     importar_iniciativas_autores(db)
+        if args.all or args.ofertas:     importar_ofertas(db)
         if args.all or args.presencas:   importar_presencas(db)
         if args.all or args.scores:      calcular_scores(db)
         if args.all or args.biografico:  scrape_biografico(db)

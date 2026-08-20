@@ -36,6 +36,11 @@ $iniciativas = db_query(
      ORDER BY i.data_entrada DESC, i.id DESC
      LIMIT 30", [$id]
 );
+$ofertas = db_query(
+    "SELECT categoria, descricao, valor, local, ofertante, representacao, data_registo, duracao, destino_final
+     FROM ofertas_hospitalidades WHERE dep_id = ?
+     ORDER BY categoria, data_registo DESC", [$id]
+);
 $total_iniciativas = db_one(
     "SELECT COUNT(*) as n FROM iniciativas_autores WHERE dep_id = ?", [$id]
 )['n'] ?? 0;
@@ -125,6 +130,7 @@ require __DIR__ . '/_header.php';
 </div>
 <?php if ($iniciativas): ?>
 <div class="card">
+<div style="overflow-x:auto">
 <table class="tbl">
 <thead><tr>
   <th style="width:60px">Tipo</th>
@@ -137,7 +143,7 @@ require __DIR__ . '/_header.php';
 <?php foreach ($iniciativas as $i): ?>
 <tr>
   <td><span class="tipo"><?=htmlspecialchars($i['tipo']??'?')?></span></td>
-  <td style="font-size:.82rem"><?=htmlspecialchars(substr($i['titulo']??'',0,90))?><?=strlen($i['titulo']??'')>90?'…':''?></td>
+  <td style="font-size:.82rem"><?=htmlspecialchars(mb_substr($i['titulo']??'',0,90))?><?=mb_strlen($i['titulo']??'')>90?'…':''?></td>
   <td style="font-size:.75rem;color:var(--mut)"><?=htmlspecialchars($i['autoria_gp']??'—')?></td>
   <td style="font-size:.76rem;color:var(--mut)"><?=htmlspecialchars(substr($i['data_entrada']??'',0,10))?></td>
   <td><?php if ($i['url_ar']): ?><a href="<?=htmlspecialchars($i['url_ar'])?>" target="_blank" style="font-size:.75rem">↗ AR</a><?php endif; ?></td>
@@ -145,6 +151,7 @@ require __DIR__ . '/_header.php';
 <?php endforeach; ?>
 </tbody>
 </table>
+</div>
 </div>
 <?php else: ?>
 <div class="empty"><div class="ei">📋</div><h3>Sem iniciativas subscritas registadas</h3></div>
@@ -160,6 +167,30 @@ require __DIR__ . '/_header.php';
     <span style="color:var(--mut)">Sem dados de presença registados</span>
   <?php endif; ?>
 </div>
+
+<div class="sec-hdr"><h2 class="sec-ttl">🎁 Ofertas, Deslocações e Hospitalidades</h2></div>
+<p style="font-size:.76rem;color:var(--mut);margin:-4px 0 8px">Registo público oficial — distinto do registo de rendimentos/património, que não pode ser reproduzido por lei.</p>
+<?php if ($ofertas): ?>
+<div class="card" style="padding:4px 0">
+<?php foreach ($ofertas as $o): ?>
+  <div style="padding:12px 20px;border-bottom:1px solid var(--bord);font-size:.85rem">
+    <span class="tipo"><?=htmlspecialchars($o['categoria'])?></span>
+    <strong><?=htmlspecialchars($o['descricao'] ?? '')?></strong>
+    <?php if ($o['valor']): ?><span style="color:var(--acc)"> · <?=htmlspecialchars($o['valor'])?></span><?php endif; ?>
+    <div style="font-size:.78rem;color:var(--mut);margin-top:3px">
+      <?php if ($o['local']): ?>📍 <?=htmlspecialchars($o['local'])?> · <?php endif; ?>
+      Ofertante: <?=htmlspecialchars($o['ofertante'] ?? '—')?>
+      <?php if ($o['representacao']): ?> · <?=htmlspecialchars($o['representacao'])?><?php endif; ?>
+      · <?=htmlspecialchars($o['data_registo'] ?? '')?>
+      <?php if ($o['duracao']): ?> · <?=htmlspecialchars($o['duracao'])?><?php endif; ?>
+      <?php if ($o['destino_final']): ?> · <em><?=htmlspecialchars($o['destino_final'])?></em><?php endif; ?>
+    </div>
+  </div>
+<?php endforeach; ?>
+</div>
+<?php else: ?>
+<div class="empty"><div class="ei">🎁</div><h3>Sem registos de ofertas, deslocações ou hospitalidades</h3></div>
+<?php endif; ?>
 
 </div>
 </main>

@@ -108,6 +108,7 @@ require __DIR__ . '/_header.php';
 
 <div class="sec-hdr"><h2 class="sec-ttl">🔄 Pipeline de dados</h2></div>
 <div class="card">
+<div style="overflow-x:auto">
 <table class="tbl">
 <thead><tr><th>Fonte</th><th>Última execução</th><th style="text-align:right">Registos (última corrida)</th></tr></thead>
 <tbody>
@@ -120,6 +121,7 @@ require __DIR__ . '/_header.php';
 <?php endforeach; ?>
 </tbody>
 </table>
+</div>
 </div>
 <p style="font-size:.78rem;color:var(--mut);margin-top:10px">
   Actualização automática todas as noites (seg–sáb, 3h) via <code>importar_ar.py --all</code>.
