@@ -37,17 +37,17 @@ function get_stats(): array {
              WHERE d.activo=1 AND d.legislatura_id=?
              GROUP BY d.gp_sigla ORDER BY total DESC", [$leg]),
         'top_presenca' => db_query(
-            "SELECT d.nome_curto, d.gp_sigla, s.taxa_presenca, s.score_total
+            "SELECT d.id, d.nome_curto, d.gp_sigla, s.taxa_presenca, s.score_total
              FROM deputados d JOIN scores s ON s.dep_id=d.id
              WHERE d.activo=1 AND d.legislatura_id=?
              ORDER BY s.taxa_presenca DESC LIMIT 10", [$leg]),
         'menos_presenca' => db_query(
-            "SELECT d.nome_curto, d.gp_sigla, s.taxa_presenca, s.score_total
+            "SELECT d.id, d.nome_curto, d.gp_sigla, s.taxa_presenca, s.score_total
              FROM deputados d JOIN scores s ON s.dep_id=d.id
              WHERE d.activo=1 AND d.legislatura_id=?
              ORDER BY s.taxa_presenca ASC LIMIT 10", [$leg]),
         'mais_iniciativas' => db_query(
-            "SELECT d.nome_curto, d.gp_sigla, s.n_iniciativas, s.score_total
+            "SELECT d.id, d.nome_curto, d.gp_sigla, s.n_iniciativas, s.score_total
              FROM deputados d JOIN scores s ON s.dep_id=d.id
              WHERE d.activo=1 AND d.legislatura_id=?
              ORDER BY s.n_iniciativas DESC LIMIT 10", [$leg]),
@@ -317,7 +317,7 @@ try { $st = get_stats(); $ok = $st['deputados'] > 0; } catch(Exception $e) { $st
     <?php foreach (array_slice($st['top_presenca'],0,8) as $r):
       $cor = gp_cor($r['gp_sigla']??''); ?>
     <li>
-      <div class="mn"><?=htmlspecialchars($r['nome_curto']??'')?><small><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($r['gp_sigla']??'')?></span></small></div>
+      <div class="mn"><a href="deputado.php?id=<?=$r['id']?>"><?=htmlspecialchars($r['nome_curto']??'')?></a><small><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($r['gp_sigla']??'')?></span></small></div>
       <div class="mv" style="color:var(--grn)"><?=pct($r['taxa_presenca']??0)?></div>
     </li>
     <?php endforeach; ?></ul></div>
@@ -328,7 +328,7 @@ try { $st = get_stats(); $ok = $st['deputados'] > 0; } catch(Exception $e) { $st
     <?php foreach (array_slice($st['menos_presenca'],0,8) as $r):
       $cor = gp_cor($r['gp_sigla']??''); ?>
     <li>
-      <div class="mn"><?=htmlspecialchars($r['nome_curto']??'')?><small><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($r['gp_sigla']??'')?></span></small></div>
+      <div class="mn"><a href="deputado.php?id=<?=$r['id']?>"><?=htmlspecialchars($r['nome_curto']??'')?></a><small><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($r['gp_sigla']??'')?></span></small></div>
       <div class="mv" style="color:var(--red)"><?=pct($r['taxa_presenca']??0)?></div>
     </li>
     <?php endforeach; ?></ul></div>
@@ -342,7 +342,7 @@ try { $st = get_stats(); $ok = $st['deputados'] > 0; } catch(Exception $e) { $st
 <?php foreach (array_slice($st['mais_iniciativas'],0,8) as $i => $r):
   $cor = gp_cor($r['gp_sigla']??''); ?>
 <li>
-  <div class="mn"><?=($i+1)?>.&nbsp;<?=htmlspecialchars($r['nome_curto']??'')?><small><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($r['gp_sigla']??'')?></span></small></div>
+  <div class="mn"><?=($i+1)?>.&nbsp;<a href="deputado.php?id=<?=$r['id']?>"><?=htmlspecialchars($r['nome_curto']??'')?></a><small><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($r['gp_sigla']??'')?></span></small></div>
   <div class="mv" style="color:var(--acc)"><?=(int)$r['n_iniciativas']?> ini.</div>
 </li>
 <?php endforeach; ?></ul></div>
@@ -417,7 +417,7 @@ $peso_ini_ui      = $tem_autores_ui ? 0.30 / $soma_pesos_ui : 0;
   <td><span class="rank <?=$rank<=3?'t':''?>"><?=$rank?></span></td>
   <td><div class="dep">
     <img src="<?=htmlspecialchars($dep['url_foto']??'')?>" alt="" class="dep-foto" onerror="this.style.display='none'">
-    <div class="dep-n"><?=htmlspecialchars($dep['nome_curto']??$dep['nome_completo']??'')?>
+    <div class="dep-n"><a href="deputado.php?id=<?=$dep['id']?>"><?=htmlspecialchars($dep['nome_curto']??$dep['nome_completo']??'')?></a></div>
   </div></td>
   <td><span class="gptag" style="background:<?=$cor?>"><?=htmlspecialchars($dep['gp_sigla']??'?')?></span></td>
   <td>
