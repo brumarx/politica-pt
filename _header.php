@@ -7,6 +7,7 @@
  */
 $tab = $tab ?? '';
 $page_title = $page_title ?? 'Assembleia da República';
+$ambito = $ambito ?? 'ar'; // 'ar' | 'autarquias' — controla o selector de âmbito e o nav activo
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -42,6 +43,13 @@ a:hover{text-decoration:underline}
 .logo-icon{width:30px;height:30px;background:var(--acc);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px}
 .logo-sub{font-size:.7rem;color:var(--mut);font-weight:400;display:block}
 .hdr-badge{font-size:.7rem;background:var(--surf2);border:1px solid var(--bord);border-radius:20px;padding:3px 10px;color:var(--mut)}
+
+/* Selector de âmbito (AR / Autarquias) */
+.ambito-switch{display:flex;background:var(--surf2);border-radius:8px;padding:3px;gap:2px}
+.ambito-switch a{padding:5px 10px;border-radius:6px;font-size:.75rem;font-weight:500;color:var(--mut);white-space:nowrap}
+.ambito-switch a:hover{color:var(--txt);text-decoration:none}
+.ambito-switch a.on{background:var(--surf);color:var(--acc);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+@media(max-width:640px){.ambito-switch a{padding:5px 7px;font-size:.68rem}.ambito-switch a span{display:none}}
 
 /* Tabs */
 .tabs{display:flex;border-bottom:1px solid var(--bord);background:var(--surf);overflow-x:auto;gap:0}
@@ -209,21 +217,32 @@ a:hover{text-decoration:underline}
 
 <header class="hdr">
   <div class="wrap hdr-inner">
-    <a href="dashboard.php" class="logo">
-      <div class="logo-icon">🏛</div>
-      <div>Transparência PT<span class="logo-sub">Assembleia da República · <?= LEG_NUM ?> Legislatura</span></div>
+    <a href="<?= $ambito==='autarquias' ? '/politica-pt/autarquias/dashboard.php' : '/politica-pt/dashboard.php' ?>" class="logo">
+      <div class="logo-icon"><?= $ambito==='autarquias' ? '🏘️' : '🏛' ?></div>
+      <div>Transparência PT<span class="logo-sub"><?= $ambito==='autarquias' ? 'Autarquias · Municípios' : 'Assembleia da República · ' . (defined('LEG_NUM') ? LEG_NUM : 'XVII') . ' Legislatura' ?></span></div>
     </a>
-    <span class="hdr-badge">Beta · dados abertos AR</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="ambito-switch">
+        <a href="/politica-pt/dashboard.php" class="<?= $ambito==='ar'?'on':'' ?>">🏛 Assembleia da República</a>
+        <a href="/politica-pt/autarquias/dashboard.php" class="<?= $ambito==='autarquias'?'on':'' ?>">🏘️ Autarquias</a>
+      </div>
+      <span class="hdr-badge">Beta · dados abertos</span>
+    </div>
   </div>
   <div class="wrap">
     <nav class="tabs">
-      <a href="dashboard.php?tab=visao" class="tab <?= $tab==='visao'?'on':'' ?>">📊 Visão Geral</a>
-      <a href="dashboard.php?tab=score" class="tab <?= $tab==='score'?'on':'' ?>">🏆 Score</a>
-      <a href="dashboard.php?tab=iniciativas" class="tab <?= $tab==='iniciativas'?'on':'' ?>">📋 Iniciativas</a>
-      <a href="dashboard.php?tab=partidos" class="tab <?= $tab==='partidos'?'on':'' ?>">🎯 Partidos</a>
-      <a href="dashboard.php?tab=grupos" class="tab <?= $tab==='grupos'?'on':'' ?>">🏛️ Grupos</a>
-      <a href="dashboard.php?tab=declaracoes" class="tab <?= $tab==='declaracoes'?'on':'' ?>">💼 Declarações</a>
-      <a href="ajuda.php" class="tab <?= $tab==='ajuda'?'on':'' ?>">❓ Ajuda</a>
+      <?php if ($ambito === 'autarquias'): ?>
+      <a href="/politica-pt/autarquias/dashboard.php" class="tab <?= $tab==='municipios'?'on':'' ?>">🏘️ Municípios</a>
+      <a href="/politica-pt/autarquias/ajuda.php" class="tab <?= $tab==='ajuda'?'on':'' ?>">❓ Ajuda</a>
+      <?php else: ?>
+      <a href="/politica-pt/dashboard.php?tab=visao" class="tab <?= $tab==='visao'?'on':'' ?>">📊 Visão Geral</a>
+      <a href="/politica-pt/dashboard.php?tab=score" class="tab <?= $tab==='score'?'on':'' ?>">🏆 Score</a>
+      <a href="/politica-pt/dashboard.php?tab=iniciativas" class="tab <?= $tab==='iniciativas'?'on':'' ?>">📋 Iniciativas</a>
+      <a href="/politica-pt/dashboard.php?tab=partidos" class="tab <?= $tab==='partidos'?'on':'' ?>">🎯 Partidos</a>
+      <a href="/politica-pt/dashboard.php?tab=grupos" class="tab <?= $tab==='grupos'?'on':'' ?>">🏛️ Grupos</a>
+      <a href="/politica-pt/dashboard.php?tab=declaracoes" class="tab <?= $tab==='declaracoes'?'on':'' ?>">💼 Declarações</a>
+      <a href="/politica-pt/ajuda.php" class="tab <?= $tab==='ajuda'?'on':'' ?>">❓ Ajuda</a>
+      <?php endif; ?>
     </nav>
   </div>
 </header>
