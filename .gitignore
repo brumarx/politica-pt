@@ -5,5 +5,6 @@ __pycache__/
 *.db-wal
 logs/*.log
 cache/
+data/snapshots/*.json
 .env
 *.key.json

@@ -33,6 +33,17 @@ function db_one(string $sql, array $params = []): ?array {
     return $st->fetch() ?: null;
 }
 
+// ─── Snapshots (pré-computados pelo ETL — etl/gerar_snapshots.py) ────────────
+define('SNAP_DIR', __DIR__ . '/data/snapshots');
+function snapshot_get(string $name): ?array {
+    $path = SNAP_DIR . "/{$name}.json";
+    if (!is_file($path)) return null;
+    $json = @file_get_contents($path);
+    if ($json === false) return null;
+    $data = json_decode($json, true);
+    return is_array($data) ? $data : null;
+}
+
 // ─── Cache ───────────────────────────────────────────────────────────────────
 function cache_get(string $key): mixed {
     try {

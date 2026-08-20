@@ -1019,6 +1019,7 @@ def main():
     p.add_argument("--iniciativas", action="store_true")
     p.add_argument("--autores",     action="store_true", help="autoria individual das iniciativas")
     p.add_argument("--scores",      action="store_true")
+    p.add_argument("--snapshots",   action="store_true", help="regenerar JSONs pré-computados p/ o dashboard")
     p.add_argument("--enrich",      action="store_true")
     p.add_argument("--biografico",  action="store_true")
     args = p.parse_args()
@@ -1038,6 +1039,8 @@ def main():
         if args.all or args.biografico:  scrape_biografico(db)
     finally:
         db.close()
+    if args.all or args.snapshots:
+        subprocess.run([sys.executable, str(Path(__file__).parent / "etl" / "gerar_snapshots.py")], check=False)
     log.info("✅ Concluído.")
 
 if __name__ == "__main__":

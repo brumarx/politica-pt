@@ -19,6 +19,7 @@ $dep_id = preg_replace('/[^0-9]/', '', $_GET['dep'] ?? '') ? (int)($_GET['dep'] 
 // ─── Dados ───────────────────────────────────────────────────────────────────
 // get_gps() já vem de db.php
 function get_stats(): array {
+    if ($snap = snapshot_get('globals')) return $snap; // pré-computado pelo ETL — zero queries
     $ck = 'stats_' . LEG_ID;
     if ($c = cache_get($ck)) return $c;
     $leg = LEG_ID;
@@ -58,6 +59,15 @@ function get_stats(): array {
 
 function get_ranking(int $page, string $gp, string $ordem, string $search): array {
     $per = 25;
+
+    // Caso mais comum (sem filtro/pesquisa, ordem por defeito) — fatia o
+    // snapshot pré-computado em vez de tocar na BD.
+    if ($gp === '' && $search === '' && $ordem === 'score' && ($snap = snapshot_get('score_ranking'))) {
+        $total = count($snap);
+        $rows  = array_slice($snap, ($page - 1) * $per, $per);
+        return compact('rows','total','page','per','gp','ordem','search');
+    }
+
     $ck = "rank_{$page}_{$gp}_{$ordem}_" . md5($search) . '_' . LEG_ID;
     if ($c = cache_get($ck)) return $c;
     $leg = LEG_ID;
@@ -130,6 +140,7 @@ function get_partidos(): array {
 }
 
 function get_grupos(): array {
+    if ($snap = snapshot_get('grupos')) return $snap; // pré-computado pelo ETL
     $ck = 'grupos_' . LEG_ID;
     if ($c = cache_get($ck)) return $c;
     $leg = LEG_ID;
